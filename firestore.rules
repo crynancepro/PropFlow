@@ -1,0 +1,76 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // Validation patterns
+    function isValidUser(data) {
+      return data.uid == request.auth.uid
+        && data.email is string
+        && data.email.size() <= 256
+        && data.startingBalance is number
+        && data.startingBalance >= 0
+        && data.currency is string
+        && data.currency.size() <= 10;
+    }
+
+    function isValidTrade(data, ownerId) {
+      return data.userId == ownerId
+        && data.symbol is string
+        && data.symbol.size() <= 30
+        && (data.direction == 'BUY' || data.direction == 'SELL')
+        && data.entryPrice is number
+        && data.entryPrice >= 0
+        && data.quantity is number
+        && data.quantity >= 0
+        && (data.status == 'OPEN' || data.status == 'CLOSED');
+    }
+
+    function isValidBacktest(data, ownerId) {
+      return data.userId == ownerId
+        && data.strategyName is string
+        && data.strategyName.size() <= 100
+        && data.symbol is string
+        && data.startingCapital is number
+        && data.winRate is number
+        && data.netProfit is number;
+    }
+
+    // User rules
+    match /users/{userId} {
+      allow read, delete: if isOwner(userId);
+      allow create: if isOwner(userId) && isValidUser(request.resource.data);
+      allow update: if isOwner(userId) && isValidUser(request.resource.data);
+
+      // Trades subcollection
+      match /trades/{tradeId} {
+        allow read, delete: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidTrade(request.resource.data, userId);
+        allow update: if isOwner(userId) && isValidTrade(request.resource.data, userId);
+      }
+
+      // Backtests subcollection
+      match /backtests/{backtestId} {
+        allow read, delete: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidBacktest(request.resource.data, userId);
+        allow update: if isOwner(userId) && isValidBacktest(request.resource.data, userId);
+      }
+    }
+  }
+}

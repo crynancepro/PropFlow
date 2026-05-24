@@ -1,0 +1,77 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "User configuration, trading defaults, and overall state information.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "The unique Firebase Auth identifier of the user" },
+        "email": { "type": "string", "description": "User email address" },
+        "displayName": { "type": "string", "description": "User profile display name" },
+        "startingBalance": { "type": "number", "description": "The capital the user started with" },
+        "currency": { "type": "string", "description": "Preferred trading currency (e.g. EUR, USD)" },
+        "riskPerTrade": { "type": "number", "description": "Default percentage risk per trade" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Timestamp when the user account was created" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Timestamp of the last profile update" }
+      },
+      "required": ["uid", "email", "startingBalance", "currency", "createdAt"]
+    },
+    "Trade": {
+      "title": "Trade Listing",
+      "description": "An individual financial trade logged by the user.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique trade ID" },
+        "userId": { "type": "string", "description": "UID of the owner" },
+        "symbol": { "type": "string", "description": "Trading asset symbol (e.g., EUR/USD, BTC/USDT, AAPL)" },
+        "direction": { "type": "string", "enum": ["BUY", "SELL"], "description": "Direction of the trade" },
+        "entryPrice": { "type": "number", "description": "Asset entry price" },
+        "exitPrice": { "type": "number", "description": "Asset exit price" },
+        "quantity": { "type": "number", "description": "Size of the trade / number of units" },
+        "stopLoss": { "type": "number", "description": "Stop Loss target price" },
+        "takeProfit": { "type": "number", "description": "Take Profit target price" },
+        "status": { "type": "string", "enum": ["OPEN", "CLOSED"], "description": "Trade current state" },
+        "pnl": { "type": "number", "description": "Profit and Loss calculation (fees subtracted)" },
+        "fees": { "type": "number", "description": "Trading fees or spread costs" },
+        "notes": { "type": "string", "description": "Personal trade psychological or technical notes/remarks" },
+        "setup": { "type": "string", "description": "Identified strategy setup (e.g., Trend, Support, AI Idea)" },
+        "rating": { "type": "integer", "description": "Psychological rating out of 5 stars" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Timestamp of trade creation" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Timestamp of last modification" },
+        "closedAt": { "type": "string", "format": "date-time", "description": "Timestamp when closed" }
+      },
+      "required": ["id", "userId", "symbol", "direction", "entryPrice", "quantity", "status", "createdAt"]
+    },
+    "Backtest": {
+      "title": "Strategy Backtest Run",
+      "description": "A simulation run testing a strategic mechanism on historical data templates.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique backtest ID" },
+        "userId": { "type": "string", "description": "UID of the owner" },
+        "strategyName": { "type": "string", "description": "Title of the backtested strategy" },
+        "symbol": { "type": "string", "description": "Asset studied" },
+        "startingCapital": { "type": "number", "description": "Initial virtual money" },
+        "winRate": { "type": "number", "description": "Calculated win rate percentage" },
+        "profitFactor": { "type": "number", "description": "Profit Factor (Gross profits / Gross losses)" },
+        "netProfit": { "type": "number", "description": "Total virtual gain or loss" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Creation timestamp" }
+      },
+      "required": ["id", "userId", "strategyName", "symbol", "startingCapital", "winRate", "netProfit", "createdAt"]
+    }
+  },
+  "firestore": {
+    "users/{userId}": {
+      "schema": "User",
+      "description": "User configurations."
+    },
+    "users/{userId}/trades/{tradeId}": {
+      "schema": "Trade",
+      "description": "Trades belonging to a user."
+    },
+    "users/{userId}/backtests/{backtestId}": {
+      "schema": "Backtest",
+      "description": "Backtest runs performed by the user."
+    }
+  }
+}

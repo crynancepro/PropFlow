@@ -1,0 +1,245 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+}
+
+/* Custom modern aesthetic styling variables */
+body {
+  background-color: #06080B;
+  background-image: 
+    radial-gradient(circle at 50% 0%, rgba(14, 165, 233, 0.08) 0%, transparent 60%),
+    radial-gradient(circle at 10% 30%, rgba(16, 185, 129, 0.03) 0%, transparent 40%),
+    radial-gradient(circle at 90% 80%, rgba(244, 63, 94, 0.03) 0%, transparent 40%),
+    linear-gradient(to bottom, transparent, #06080b 80%),
+    url("data:image/svg+xml,%3Csvg width='40' height='40' viewBox='0 0 40 40' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M0 0h1v1H0V0zm20 20h1v1h-1v-1z' fill='%23ffffff' fill-opacity='.015' fill-rule='evenodd'/%3E%3C/svg%3E");
+  color: #F1F5F9;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Scrollbar customizations */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0A0B0D;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #21262E;
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #3B82F6;
+}
+
+/* Fade in effects and glow states */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fadeInUp {
+  animation: fadeInUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* Shimmer background animation */
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.shimmer-text {
+  background: linear-gradient(90deg, #F1F5F9 25%, #38BDF8 50%, #F1F5F9 75%);
+  background-size: 200% auto;
+  color: transparent;
+  -webkit-background-clip: text;
+  background-clip: text;
+  animation: shimmer 5s linear infinite;
+}
+
+/* Glow panels */
+.glow-premium {
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.glow-emerald-card {
+  box-shadow: 0 0 25px rgba(16, 185, 129, 0.05);
+}
+
+.glow-rose-card {
+  box-shadow: 0 0 25px rgba(244, 63, 94, 0.05);
+}
+
+.glow-sky-card {
+  box-shadow: 0 0 25px rgba(14, 165, 233, 0.05);
+}
+
+/* PREMIUM LIGHT THEME ENGINE OVERRIDES */
+:root.light {
+  color-scheme: light;
+}
+
+:root.light body {
+  background-color: #F3F4F6 !important;
+  background-image: 
+    radial-gradient(circle at 50% 0%, rgba(14, 165, 233, 0.05) 0%, transparent 50%),
+    radial-gradient(circle at 10% 30%, rgba(16, 185, 129, 0.02) 0%, transparent 40%),
+    radial-gradient(circle at 90% 80%, rgba(244, 63, 94, 0.02) 0%, transparent 40%),
+    linear-gradient(to bottom, transparent, #F3F4F6 85%),
+    url("data:image/svg+xml,%3Csvg width='40' height='40' viewBox='0 0 40 40' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M0 0h1v1H0V0zm20 20h1v1h-1v-1z' fill='%23000000' fill-opacity='.015' fill-rule='evenodd'/%3E%3C/svg%3E") !important;
+  color: #1E293B !important;
+}
+
+/* Structure, borders and panels overrides */
+:root.light .bg-\[\#07090E\]\/90 {
+  background-color: rgba(255, 255, 255, 0.92) !important;
+}
+
+:root.light .bg-\[\#0A0B0D\] {
+  background-color: #F8FAFC !important;
+}
+
+:root.light .bg-\[\#0A0B0D\]\/50 {
+  background-color: rgba(241, 245, 249, 0.6) !important;
+}
+
+:root.light .bg-\[\#0D0E12\] {
+  background-color: #F1F5F9 !important;
+}
+
+:root.light .bg-\[\#0E1116\] {
+  background-color: #F1F5F9 !important;
+}
+
+:root.light .bg-\[\#0E1116\]\/80 {
+  background-color: rgba(241, 245, 249, 0.8) !important;
+}
+
+:root.light .bg-\[\#0E1217\] {
+  background-color: #F1F5F9 !important;
+}
+
+:root.light .bg-\[\#0E1217\]\/50 {
+  background-color: rgba(241, 245, 249, 0.5) !important;
+}
+
+:root.light .bg-\[\#12161F\] {
+  background-color: #FFFFFF !important;
+}
+
+:root.light .bg-\[\#161B22\] {
+  background-color: #FFFFFF !important;
+}
+
+:root.light .bg-\[\#161B22\]\/55, :root.light .bg-\[\#161B22\]\/50, :root.light .bg-\[\#161B22\]\/60 {
+  background-color: rgba(255, 255, 255, 0.72) !important;
+}
+
+:root.light .bg-\[\#12171E\] {
+  background-color: #F8FAFC !important;
+}
+
+:root.light .bg-\[\#090B11\] {
+  background-color: #F1F5F9 !important;
+}
+
+:root.light .bg-\[\#090B11\]\/50 {
+  background-color: rgba(241, 245, 249, 0.55) !important;
+}
+
+:root.light .bg-gradient-to-b.from-\[\#12161F\].to-\[\#0A0D14\],
+:root.light .bg-gradient-to-b.from-\[\#12161F\] {
+  background-image: linear-gradient(to bottom, #FFFFFF, #F3F4F6) !important;
+}
+
+:root.light .bg-\[\#0F1115\] {
+  background-color: #FFFFFF !important;
+  border-top-color: rgba(15, 23, 42, 0.08) !important;
+}
+
+:root.light .hover\:bg-white\/5:hover {
+  background-color: rgba(15, 23, 42, 0.05) !important;
+}
+
+:root.light .hover\:bg-white\/3:hover {
+  background-color: rgba(15, 23, 42, 0.03) !important;
+}
+
+/* Modifiers for text contrast and readability */
+:root.light .text-slate-100 { color: #0F172A !important; }
+:root.light .text-slate-200 { color: #1E293B !important; }
+:root.light .text-slate-300 { color: #334155 !important; }
+:root.light .text-slate-400 { color: #475569 !important; }
+:root.light .text-slate-500 { color: #64748B !important; }
+:root.light .text-slate-600 { color: #94A3B8 !important; }
+:root.light .text-white { color: #1E293B !important; }
+
+/* Keep active colors & numbers readable on light backgrounds */
+:root.light .text-sky-400 { color: #0284C7 !important; }
+:root.light .text-emerald-400 { color: #059669 !important; }
+:root.light .text-cyan-400 { color: #0891B2 !important; }
+:root.light .text-teal-400 { color: #0D9488 !important; }
+:root.light .text-rose-400 { color: #E11D48 !important; }
+:root.light .text-amber-400 { color: #D97706 !important; }
+:root.light .text-purple-400 { color: #9333EA !important; }
+
+/* Invert input borders & labels */
+:root.light .border-white\/5 {
+  border-color: rgba(15, 23, 42, 0.08) !important;
+}
+
+:root.light .border-white\/10 {
+  border-color: rgba(15, 23, 42, 0.12) !important;
+}
+
+:root.light input, :root.light select, :root.light textarea {
+  background-color: #FFFFFF !important;
+  color: #0F172A !important;
+  border-color: rgba(15, 23, 42, 0.12) !important;
+}
+
+:root.light input:focus, :root.light select:focus, :root.light textarea:focus {
+  border-color: #0ea5e9 !important;
+  outline: none !important;
+  box-shadow: 0 0 0 2px rgba(14, 165, 233, 0.15) !important;
+}
+
+/* Card gradients & shimmers */
+:root.light .shimmer-text {
+  background: linear-gradient(90deg, #1E293B 25%, #0284C7 50%, #1E293B 75%);
+  background-size: 200% auto;
+  color: transparent;
+  -webkit-background-clip: text;
+  background-clip: text;
+  animation: shimmer 5s linear infinite;
+}
+
+/* Custom scrollbars for light mode */
+:root.light ::-webkit-scrollbar-track {
+  background: #F1F5F9;
+}
+
+:root.light ::-webkit-scrollbar-thumb {
+  background: #CBD5E1;
+}
+
+:root.light ::-webkit-scrollbar-thumb:hover {
+  background: #94A3B8;
+}

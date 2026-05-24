@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="fr" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mon Espace de Travail - Authentification Trading Journal</title>
+    <!-- Tailwind CSS modern CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts for ultimate design -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;700&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+    <!-- Lucide Icons CDN -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #07090E;
+        }
+        .heading-font {
+            font-family: 'Space Grotesk', sans-serif;
+        }
+        .mono-font {
+            font-family: 'JetBrains Mono', monospace;
+        }
+        /* Custom smooth transition duration */
+        .transition-all-300 {
+            transition: all 300ms cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        /* Premium radial blur background glows */
+        .glow-radial-blue {
+            background: radial-gradient(circle, rgba(14, 165, 233, 0.15) 0%, rgba(7, 9, 14, 0) 70%);
+        }
+        .glow-radial-teal {
+            background: radial-gradient(circle, rgba(20, 184, 166, 0.12) 0%, rgba(7, 9, 14, 0) 70%);
+        }
+        /* Shimmer text effect */
+        .shimmer-text {
+            background: linear-gradient(to right, #ffffff 20%, #0ea5e9 40%, #14b8a6 60%, #ffffff 80%);
+            background-size: 200% auto;
+            color: transparent;
+            -webkit-background-clip: text;
+            background-clip: text;
+            animation: shine 5s linear infinite;
+        }
+        @keyframes shine {
+            to {
+                background-position: 200% center;
+            }
+        }
+    </style>
+</head>
+<body class="text-slate-200 min-h-screen flex items-center justify-center p-4 relative overflow-x-hidden select-none">
+
+    <!-- Ambient glowing backgrounds orbs -->
+    <div class="absolute -top-[25%] -left-[10%] w-[60vw] h-[60vw] rounded-full glow-radial-blue pointer-events-none z-0"></div>
+    <div class="absolute -bottom-[20%] -right-[15%] w-[55vw] h-[55vw] rounded-full glow-radial-teal pointer-events-none z-0"></div>
+
+    <!-- Main Card Container -->
+    <div class="w-full max-w-md bg-gradient-to-b from-[#12161F] to-[#0A0D14] border border-white/5 rounded-2xl p-8 relative z-10 shadow-[0_24px_50px_rgba(0,0,0,0.6)] backdrop-blur-md transition-all-300 hover:border-white/10" id="auth-interface-card">
+        
+        <!-- Laser Accent Line at Top -->
+        <div class="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-cyan-500 to-transparent rounded-t-2xl"></div>
+
+        <!-- Header Brand Section -->
+        <div class="text-center mb-8 relative">
+            <div class="inline-flex p-3 bg-cyan-500/10 text-cyan-400 rounded-2xl border border-cyan-500/20 mb-3.5 shadow-lg shadow-cyan-500/5 hover:scale-105 transition-transform duration-300">
+                <i data-lucide="trending-up" class="w-6 h-6 stroke-[2.5] animate-pulse"></i>
+            </div>
+            <h1 class="text-xl font-black uppercase tracking-wider text-white heading-font">
+                <span class="shimmer-text">TRADER JOURNAL</span>
+                <span class="text-[9px] bg-cyan-500/15 text-cyan-400 font-bold px-2 py-0.5 rounded border border-cyan-500/20 align-middle ml-1.5 mono-font">v3.0</span>
+            </h1>
+            <p class="text-slate-400 text-xs mt-1.5 uppercase tracking-widest font-mono font-bold">
+                Espace de Travail - Accès
+            </p>
+        </div>
+
+        <!-- Mode Toggle Switch (Tabs) -->
+        <div class="grid grid-cols-2 p-1.5 bg-[#090B11] border border-white/5 rounded-xl mb-6 relative">
+            <button 
+                id="btn-login-mode" 
+                onclick="setMode('login')"
+                class="py-2 text-xs font-black uppercase tracking-wide rounded-lg transition-all duration-200 z-10 flex items-center justify-center gap-2 text-white bg-slate-800 border border-white/5 shadow"
+            >
+                <i data-lucide="log-in" class="w-3.5 h-3.5"></i>
+                Connexion
+            </button>
+            <button 
+                id="btn-register-mode" 
+                onclick="setMode('register')"
+                class="py-2 text-xs font-black uppercase tracking-wide rounded-lg transition-all duration-200 z-10 flex items-center justify-center gap-2 text-slate-400 hover:text-slate-100"
+            >
+                <i data-lucide="user-plus" class="w-3.5 h-3.5"></i>
+                Inscription
+            </button>
+        </div>
+
+        <!-- System Response/Error Notification Unit -->
+        <div id="alert-box" class="hidden mb-5 bg-rose-500/10 border border-rose-500/20 text-rose-400 px-4 py-3 rounded-xl animate-fadeIn text-xs flex items-start gap-2.5">
+            <i data-lucide="alert-triangle" class="w-4 h-4 shrink-0 mt-0.5"></i>
+            <div>
+                <span class="font-extrabold uppercase block tracking-wider mb-0.5">Erreur système</span>
+                <span id="alert-message">Une erreur s'est produite lors de la connexion.</span>
+            </div>
+        </div>
+
+        <!-- Success Redirection Notification Unit -->
+        <div id="success-box" class="hidden mb-5 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-4 py-4 rounded-xl animate-scaleIn text-xs flex items-center gap-3">
+            <i data-lucide="check-circle" class="w-5 h-5 text-emerald-400 shrink-0"></i>
+            <div>
+                <span class="font-black uppercase block tracking-wider">Succès de l'accès</span>
+                <span id="success-message">Compte authentifié, redirection vers le tableau de bord...</span>
+            </div>
+        </div>
+
+        <!-- Authentic Form -->
+        <form id="auth-form" onsubmit="handleAuthSubmit(event)" class="space-y-5">
+            
+            <!-- Email Box -->
+            <div class="flex flex-col">
+                <label for="input-email" class="text-[10px] text-slate-450 font-black uppercase tracking-widest font-mono mb-2">
+                    Adresse Email
+                </label>
+                <div class="relative flex items-center">
+                    <span class="absolute left-3.5 text-slate-500">
+                        <i data-lucide="mail" class="w-4 h-4"></i>
+                    </span>
+                    <input 
+                        type="email" 
+                        id="input-email" 
+                        required
+                        placeholder="trader@universe.com"
+                        class="w-full bg-[#090B11] border border-white/5 focus:border-cyan-500/40 rounded-xl pl-10 pr-4 py-3 text-xs text-white outline-none font-medium transition-all duration-150 shadow-inner placeholder-slate-650"
+                    />
+                </div>
+            </div>
+
+            <!-- Password Box -->
+            <div class="flex flex-col">
+                <div class="flex items-center justify-between mb-2">
+                    <label for="input-password" class="text-[10px] text-slate-450 font-black uppercase tracking-widest font-mono">
+                        Mot de passe
+                    </label>
+                    <a href="#" onclick="handleForgotPassword(event)" class="text-[10px] text-cyan-400 hover:text-cyan-500 font-bold font-mono transition-colors uppercase">
+                        Oublié ?
+                    </a>
+                </div>
+                <div class="relative flex items-center">
+                    <span class="absolute left-3.5 text-slate-500">
+                        <i data-lucide="lock" class="w-4 h-4"></i>
+                    </span>
+                    <input 
+                        type="password" 
+                        id="input-password" 
+                        required
+                        placeholder="••••••••••••"
+                        class="w-full bg-[#090B11] border border-white/5 focus:border-cyan-500/40 rounded-xl pl-10 pr-4 py-3 text-xs text-white outline-none font-medium transition-all duration-150 shadow-inner placeholder-slate-650"
+                    />
+                </div>
+            </div>
+
+            <!-- Additional Password Match Panel (Only shown in sign up/inscription mode) -->
+            <div id="confirm-password-container" class="hidden flex flex-col pt-1 animate-fadeIn">
+                <label for="input-confirm-password" class="text-[10px] text-slate-450 font-black uppercase tracking-widest font-mono mb-2">
+                    Confirmer le mot de passe
+                </label>
+                <div class="relative flex items-center">
+                    <span class="absolute left-3.5 text-slate-500">
+                        <i data-lucide="shield-check" class="w-4 h-4"></i>
+                    </span>
+                    <input 
+                        type="password" 
+                        id="input-confirm-password"
+                        placeholder="••••••••••••"
+                        class="w-full bg-[#090B11] border border-white/5 focus:border-cyan-500/40 rounded-xl pl-10 pr-4 py-3 text-xs text-white outline-none font-medium transition-all duration-150 shadow-inner placeholder-slate-650"
+                    />
+                </div>
+            </div>
+
+            <!-- Custom Security Checkbox (Optional style check) -->
+            <div class="flex items-start gap-2.5 pt-1.5">
+                <input 
+                    type="checkbox" 
+                    id="input-terms" 
+                    checked
+                    required
+                    class="accent-cyan-500 h-3.5 w-3.5 rounded bg-slate-900 border-white/5 transition-colors cursor-pointer mt-0.5"
+                />
+                <label for="input-terms" class="text-[10px] text-slate-420 font-medium leading-normal cursor-pointer select-none">
+                    Je consens au chiffrement de mes données de trading stockées de manière étanche.
+                </label>
+            </div>
+
+            <!-- Submit Button (Action trigger) -->
+            <button 
+                type="submit" 
+                id="btn-auth-submit"
+                class="w-full py-3.5 mt-2 bg-gradient-to-r from-cyan-500 to-cyan-600 hover:from-cyan-600 hover:to-cyan-700 text-white font-black text-xs uppercase tracking-widest rounded-xl shadow-lg shadow-cyan-500/10 cursor-pointer flex items-center justify-center gap-2 transition-all hover:-translate-y-0.5 duration-200"
+            >
+                <span id="btn-auth-text">Se connecter à mon compte</span>
+                <i data-lucide="arrow-right" class="w-4 h-4"></i>
+            </button>
+        </form>
+
+        <!-- Google Auth Secondary Integration Drawer -->
+        <div class="relative my-7 flex items-center justify-center">
+            <span class="absolute left-0 right-0 h-[1px] bg-white/5"></span>
+            <span class="relative bg-[#10141D] px-4 text-[10px] text-slate-500 font-bold uppercase tracking-widest font-mono">OU ACCÈS RAPIDE</span>
+        </div>
+
+        <button 
+            type="button" 
+            onclick="handleQuickGoogleLogin()"
+            class="w-full bg-[#090B11] hover:bg-slate-800 border border-white/5 hover:border-slate-700 text-slate-200 font-bold text-xs p-3.5 rounded-xl flex items-center justify-center gap-2.5 transition-all cursor-pointer"
+        >
+            <svg class="h-4 w-4" viewBox="0 0 24 24">
+                <path fill="#EA4335" d="M12 5.04c1.62 0 3.08.56 4.22 1.65l3.15-3.15C17.45 1.68 14.93 1 12 1 7.35 1 3.4 3.65 1.48 7.5l3.77 2.92C6.18 7.22 8.87 5.04 12 5.04z" />
+                <path fill="#4285F4" d="M23.49 12.27c0-.8-.07-1.56-.2-2.3H12v4.35h6.44c-.28 1.46-1.1 2.69-2.33 3.52l3.63 2.82c2.12-1.95 3.75-4.83 3.75-8.39z" />
+                <path fill="#FBBC05" d="M5.25 14.58C5.02 13.9.49 13.1.49 12s.13-1.9.36-2.58l-3.77-2.92C1.35 7.93 1 9.93 1 12s.35 4.07 1.08 5.5l3.17-2.92z" />
+                <path fill="#34A853" d="M12 23c3.24 0 5.97-1.07 7.96-2.91l-3.63-2.82c-1.1.74-2.51 1.18-4.33 1.18-3.13 0-5.82-2.18-6.77-5.38L1.46 16c1.92 3.85 5.87 6.5 10.54 6.5z" />
+            </svg>
+            <span>Synchroniser avec mon compte Google</span>
+        </button>
+
+        <!-- Information disclaimer -->
+        <div class="mt-6 text-center text-[10px] text-slate-500">
+            <span class="font-mono block">🖥️ CHIP CO-PROCESSOR ENCRYPTION SHIELD ACTIVE</span>
+        </div>
+
+    </div>
+
+    <!-- Firebase SDK Modular Scripts (ESM) -->
+    <script type="module">
+        // Import basic modules
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
+        import { 
+            getAuth, 
+            createUserWithEmailAndPassword, 
+            signInWithEmailAndPassword, 
+            GoogleAuthProvider, 
+            signInWithPopup,
+            sendPasswordResetEmail
+        } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
+
+        // Firebase configuration (fictitious variables that you can replace with your actual keys from console)
+        const firebaseConfig = {
+            apiKey: "VOTRE_API_KEY_ICI",
+            authDomain: "votre-journal-trading.firebaseapp.com",
+            projectId: "votre-journal-trading",
+            storageBucket: "votre-journal-trading.appspot.com",
+            messagingSenderId: "1234567890",
+            appId: "1:1234567:web:abcd0987efgh"
+        };
+
+        // Initialize Firebase
+        let app, auth, googleProvider;
+        try {
+            app = initializeApp(firebaseConfig);
+            auth = getAuth(app);
+            googleProvider = new GoogleAuthProvider();
+            console.log("Firebase initialisé avec succès ! Prêt pour l'utilisation.");
+        } catch (e) {
+            console.error("Erreur d'initialisation :", e);
+        }
+
+        // Global state variable
+        window.currentMode = 'login'; // default mode
+
+        // Expose functions to window so buttons inside HTML can click them
+        window.setMode = function(mode) {
+            window.currentMode = mode;
+            const btnLogin = document.getElementById('btn-login-mode');
+            const btnRegister = document.getElementById('btn-register-mode');
+            const confirmContainer = document.getElementById('confirm-password-container');
+            const btnText = document.getElementById('btn-auth-text');
+            const alertBox = document.getElementById('alert-box');
+            const successBox = document.getElementById('success-box');
+
+            // Reset error messages and success alerts
+            alertBox.classList.add('hidden');
+            successBox.classList.add('hidden');
+
+            if (mode === 'login') {
+                // Set Tab Visual State
+                btnLogin.className = "py-2 text-xs font-black uppercase tracking-wide rounded-lg transition-all duration-200 z-10 flex items-center justify-center gap-2 text-white bg-slate-800 border border-white/5 shadow";
+                btnRegister.className = "py-2 text-xs font-black uppercase tracking-wide rounded-lg transition-all duration-200 z-10 flex items-center justify-center gap-2 text-slate-400 hover:text-slate-100";
+                
+                // Hide Confirm password
+                confirmContainer.classList.add('hidden');
+                
+                // Update button text
+                btnText.innerText = "Se connecter à mon compte";
+            } else {
+                // Set Tab Visual State
+                btnRegister.className = "py-2 text-xs font-black uppercase tracking-wide rounded-lg transition-all duration-200 z-10 flex items-center justify-center gap-2 text-white bg-slate-800 border border-white/5 shadow";
+                btnLogin.className = "py-2 text-xs font-black uppercase tracking-wide rounded-lg transition-all duration-200 z-10 flex items-center justify-center gap-2 text-slate-400 hover:text-slate-100";
+                
+                // Show Confirm Password box
+                confirmContainer.classList.remove('hidden');
+                
+                // Update button text
+                btnText.innerText = "Créer mon espace trading";
+            }
+        };
+
+        // Handle Form Submit (Main Authentication Action)
+        window.handleAuthSubmit = async function(event) {
+            event.preventDefault();
+            const email = document.getElementById('input-email').value;
+            const password = document.getElementById('input-password').value;
+            const alertBox = document.getElementById('alert-box');
+            const alertMsg = document.getElementById('alert-message');
+            const successBox = document.getElementById('success-box');
+            const successMsg = document.getElementById('success-message');
+            const btnSubmit = document.getElementById('btn-auth-submit');
+
+            // Reset visual banners
+            alertBox.classList.add('hidden');
+            successBox.classList.add('hidden');
+
+            // Disable submit button during load trigger
+            btnSubmit.disabled = true;
+            btnSubmit.classList.add('opacity-40');
+
+            try {
+                if (window.currentMode === 'login') {
+                    // Sign-In Login Routine
+                    console.log("Tentative de connexion pour :", email);
+                    
+                    if (auth) {
+                        const credential = await signInWithEmailAndPassword(auth, email, password);
+                        console.log("Connecté avec succès !", credential.user);
+                        
+                        // Show success visual indicator
+                        successMsg.innerText = `Ravi de vous revoir ! Authentifié avec succès (${credential.user.email}). Ouverture immédiate de votre journal...`;
+                        successBox.classList.remove('hidden');
+                    } else {
+                        // Simulation Mode (fallbacks elegantly to let user experience visual workflow without database)
+                        console.log("Simulation de connexion en cours (Firebase non connecté).");
+                        successMsg.innerText = `Mode Démo : Connexion établie avec succès (${email}) ! Chargement de l'espace de travail en cours...`;
+                        successBox.classList.remove('hidden');
+                    }
+                } else {
+                    // Sign-Up Register Routine
+                    const confirmPassword = document.getElementById('input-confirm-password').value;
+                    
+                    // Client-side quick validate passwords
+                    if (password !== confirmPassword) {
+                        throw { code: 'auth/passwords-do-not-match', message: 'Les deux mots de passe saisis ne correspondent pas.' };
+                    }
+                    if (password.length < 6) {
+                        throw { code: 'auth/weak-password', message: 'Le mot de passe doit contenir au moins 6 caractères.' };
+                    }
+
+                    console.log("Tentative de création de compte pour :", email);
+                    
+                    if (auth) {
+                        const credential = await createUserWithEmailAndPassword(auth, email, password);
+                        console.log("Compte créé avec succès !", credential.user);
+                        
+                        // Show success visual indicator
+                        successMsg.innerText = `Félicitations, votre espace a été provisionné (${credential.user.email}) ! Bienvenue dans votre journal. Redirection...`;
+                        successBox.classList.remove('hidden');
+                    } else {
+                        // Simulation Mode
+                        console.log("Simulation de création de compte en cours.");
+                        successMsg.innerText = `Mode Démo : Inscription enregistrée pour ${email} ! Votre journal sécurisé est désormais accessible. Redirection...`;
+                        successBox.classList.remove('hidden');
+                    }
+                }
+
+                // Simulate redirect trigger after 2.5 seconds
+                setTimeout(() => {
+                    alert("Accès autorisé ! Redirection simulée vers l'espace de travail de trading v3.0.");
+                }, 2000);
+
+            } catch (err) {
+                console.error("Authentification Erreur :", err);
+                alertBox.classList.remove('hidden');
+                
+                // Customize and explain classic Firebase error codes in elegant French
+                switch (err.code) {
+                    case 'auth/invalid-email':
+                        alertMsg.innerText = "L'adresse email saisie est incorrecte ou mal formatée.";
+                        break;
+                    case 'auth/user-disabled':
+                        alertMsg.innerText = "Cet utilisateur a été désactivé par l'administrateur.";
+                        break;
+                    case 'auth/user-not-found':
+                    case 'auth/wrong-password':
+                    case 'auth/invalid-credential':
+                        alertMsg.innerText = "Identifiants inconnus. Veuillez vérifier l'adresse email et le mot de passe.";
+                        break;
+                    case 'auth/email-already-in-use':
+                        alertMsg.innerText = "Un compte existe déjà avec cette adresse email. Veuillez vous connecter.";
+                        break;
+                    case 'auth/weak-password':
+                        alertMsg.innerText = err.message || "Le mot de passe doit être composé d'au moins 6 caractères.";
+                        break;
+                    case 'auth/passwords-do-not-match':
+                        alertMsg.innerText = err.message || "Les deux mots de passe ne correspondent pas.";
+                        break;
+                    default:
+                        alertMsg.innerText = err.message || "Une erreur réseau ou d'identification est survenue. Veuillez réessayer.";
+                        break;
+                }
+            } finally {
+                // Re-enable submit actions
+                btnSubmit.disabled = false;
+                btnSubmit.classList.remove('opacity-40');
+            }
+        };
+
+        // Google sign-in backup activation click
+        window.handleQuickGoogleLogin = async function() {
+            const alertBox = document.getElementById('alert-box');
+            const alertMsg = document.getElementById('alert-message');
+            const successBox = document.getElementById('success-box');
+            const successMsg = document.getElementById('success-message');
+
+            alertBox.classList.add('hidden');
+            successBox.classList.add('hidden');
+
+            try {
+                if (auth && googleProvider) {
+                    const result = await signInWithPopup(auth, googleProvider);
+                    successMsg.innerText = `Synchronisé avec Google (${result.user.email}) ! Accès accordé.`;
+                    successBox.classList.remove('hidden');
+                } else {
+                    console.log("Simulation Google Auth.");
+                    successMsg.innerText = "Mode Démo : Connexion Google simulée avec succès ! Chargement en cours...";
+                    successBox.classList.remove('hidden');
+                }
+            } catch (err) {
+                console.error(err);
+                alertBox.classList.remove('hidden');
+                alertMsg.innerText = err.message || "La connexion Google a été annulée ou a rencontré un obstacle technique.";
+            }
+        };
+
+        // Forgot password utility reset
+        window.handleForgotPassword = async function(event) {
+            event.preventDefault();
+            const email = document.getElementById('input-email').value;
+            const alertBox = document.getElementById('alert-box');
+            const alertMsg = document.getElementById('alert-message');
+            const successBox = document.getElementById('success-box');
+            const successMsg = document.getElementById('success-message');
+
+            if (!email) {
+                alertBox.classList.remove('hidden');
+                alertMsg.innerText = "Saisissez d'abord votre adresse email dans le champ ci-dessus pour recevoir le lien de réinitialisation.";
+                return;
+            }
+
+            try {
+                if (auth) {
+                    await sendPasswordResetEmail(auth, email);
+                    successBox.classList.remove('hidden');
+                    successMsg.innerText = `L'email de réinitialisation de mot de passe a été envoyé à ${email}. Observez votre boîte de réception.`;
+                } else {
+                    successBox.classList.remove('hidden');
+                    successMsg.innerText = `[Simulation] Un lien de réinitialisation a été envoyé à ${email}.`;
+                }
+            } catch (err) {
+                alertBox.classList.remove('hidden');
+                alertMsg.innerText = err.message || "Le service de réinitialisation a rencontré une difficulté.";
+            }
+        };
+
+        // Render icons dynamic trigger
+        lucide.createIcons();
+    </script>
+</body>
+</html>

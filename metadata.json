@@ -1,0 +1,6 @@
+{
+  "name": "PropFlow",
+  "description": "Un journal de trading intelligent et sécurisé avec suivi automatique de performance, backtesting, alertes d'opportunités de marché par IA et synchronisation cloud.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
