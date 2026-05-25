@@ -14,7 +14,7 @@ import WorkspaceLinks from './components/WorkspaceLinks';
 import FirebaseAuthentication from './components/FirebaseAuthentication';
 
 import { 
-  auth, db, isConfigured, loginWithGoogle, logoutUser, handleFirestoreError, OperationType 
+  auth, db, isConfigured, loginWithGoogle, logoutUser, handleFirestoreError, OperationType, sanitizeFirestoreData 
 } from './firebase-setup';
 import { doc, setDoc, getDoc, collection, onSnapshot, deleteDoc, updateDoc } from 'firebase/firestore';
 import { onAuthStateChanged, type User as FirebaseUser } from 'firebase/auth';
@@ -151,80 +151,129 @@ export default function App() {
   useEffect(() => {
     // 1. Authenticated state listener
     let unsubscribeTrades: () => void = () => {};
+    let unsubscribeUser: () => void = () => {};
 
     if (isConfigured && auth) {
       const authUnsubscribe = onAuthStateChanged(auth, async (user) => {
         setCurrentUser(user);
+        
+        // Clean up previous listeners if they exist
+        if (unsubscribeTrades) unsubscribeTrades();
+        if (unsubscribeUser) unsubscribeUser();
+
         if (user) {
           setLoadingCloud(true);
-          // Sync with Firestore profile & trades
+
           try {
             const userDocRef = doc(db, 'users', user.uid);
-            const userSnap = await getDoc(userDocRef);
             
-            if (userSnap.exists()) {
-              const userData = userSnap.data();
-              setStartingBalance(userData.startingBalance || 100000);
-              setCurrency(userData.currency || 'USD');
-              if (userData.accounts && userData.accounts.length > 0) {
-                setAccounts(userData.accounts);
-              }
-              if (userData.activeAccountId) {
-                setActiveAccountId(userData.activeAccountId);
-              }
-            } else {
-              // Create user profile in firestore
-              await setDoc(userDocRef, {
-                uid: user.uid,
-                email: user.email,
-                displayName: user.displayName,
-                startingBalance: 100000,
-                currency: 'USD',
-                accounts: [
-                  {
-                    id: "default-propfirm",
-                    name: "Compte Principal (PropFirm)",
-                    type: "PROPFIRM",
-                    firmOrBrokerName: "FTMO",
-                    startingBalance: 100000,
-                    currency: "USD",
-                    createdAt: new Date().toISOString()
-                  }
-                ],
-                activeAccountId: "default-propfirm",
-                createdAt: new Date().toISOString()
-              });
-            }
+            // 1. Subscribe to real-time User Document changes (accounts, starting balance, currency, etc.)
+            unsubscribeUser = onSnapshot(userDocRef, async (userSnap) => {
+              if (userSnap.exists()) {
+                const userData = userSnap.data();
+                if (userData.startingBalance !== undefined) {
+                  setStartingBalance(userData.startingBalance);
+                }
+                if (userData.currency !== undefined) {
+                  setCurrency(userData.currency);
+                }
+                if (userData.accounts && userData.accounts.length > 0) {
+                  setAccounts(userData.accounts);
+                }
+                if (userData.activeAccountId !== undefined) {
+                  setActiveAccountId(userData.activeAccountId);
+                }
+              } else {
+                // Initialize user document in cloud Firestore using current template/local data
+                const currentCap = parseFloat(localStorage.getItem('trading_capital') || '100000');
+                const currentCurrVal = localStorage.getItem('trading_currency') || 'USD';
+                let currentAccounts = accounts;
+                const rawLocalAccs = localStorage.getItem('trading_accounts');
+                if (rawLocalAccs) {
+                  try {
+                    currentAccounts = JSON.parse(rawLocalAccs);
+                  } catch(_) {}
+                }
+                const currentActiveId = localStorage.getItem('trading_active_account_id') || 'default-propfirm';
 
-            // Real-time trades subscription
+                await setDoc(userDocRef, sanitizeFirestoreData({
+                  uid: user.uid,
+                  email: user.email,
+                  displayName: user.displayName,
+                  startingBalance: currentCap,
+                  currency: currentCurrVal,
+                  accounts: currentAccounts,
+                  activeAccountId: currentActiveId,
+                  createdAt: new Date().toISOString()
+                }));
+              }
+            }, (err) => {
+              console.error("Échec du chargement en temps réel du profil utilisateur:", err);
+            });
+
+            // 2. Subscribe to real-time Trades Subcollection changes
             const tradesColl = collection(db, 'users', user.uid, 'trades');
-            unsubscribeTrades = onSnapshot(tradesColl, (snapshot) => {
+            unsubscribeTrades = onSnapshot(tradesColl, async (snapshot) => {
               const cloudTrades: Trade[] = [];
-              snapshot.forEach((doc) => {
-                cloudTrades.push({ id: doc.id, ...doc.data() } as Trade);
+              snapshot.forEach((docSnap) => {
+                cloudTrades.push({ id: docSnap.id, ...docSnap.data() } as Trade);
               });
               
               if (cloudTrades.length > 0) {
                 setTrades(cloudTrades);
+                // Cache instantly
+                localStorage.setItem(`trading_journal_trades_${user.uid}`, JSON.stringify(cloudTrades));
+                localStorage.setItem('trading_journal_trades', JSON.stringify(cloudTrades));
               } else {
-                setTrades([]);
+                // Cloud is empty. If we have local offline trades, sync them up to the cloud!
+                const localTr = localStorage.getItem(`trading_journal_trades_${user.uid}`) || localStorage.getItem('trading_journal_trades');
+                if (localTr) {
+                  try {
+                    const parsedLocal = JSON.parse(localTr) as Trade[];
+                    // Only sync actual trades, not the bare initial default mocks
+                    const userCreatedTrades = parsedLocal.filter(t => !DEFAULT_TRADES.some(dt => dt.id === t.id));
+                    
+                    if (userCreatedTrades.length > 0) {
+                      setTrades(parsedLocal);
+                      // Back-sync in background without holding UI
+                      for (const t of parsedLocal) {
+                        const syncedTrade = { ...t, userId: user.uid };
+                        setDoc(doc(db, 'users', user.uid, 'trades', t.id), sanitizeFirestoreData(syncedTrade)).catch(e => {
+                          console.warn("Retrying/Silent save for trade sync failed:", e);
+                        });
+                      }
+                    } else {
+                      setTrades([]);
+                      localStorage.setItem(`trading_journal_trades_${user.uid}`, JSON.stringify([]));
+                      localStorage.setItem('trading_journal_trades', JSON.stringify([]));
+                    }
+                  } catch (err) {
+                    setTrades([]);
+                  }
+                } else {
+                  setTrades([]);
+                }
               }
               setLoadingCloud(false);
               setAuthResolving(false);
             }, (err) => {
-              handleFirestoreError(err, OperationType.LIST, `users/${user.uid}/trades`);
+              console.warn("Firestore collection list permission restricted. Mode local actif.", err);
+              loadLocalFallback(user.uid);
               setLoadingCloud(false);
               setAuthResolving(false);
             });
 
           } catch (e) {
             console.error("Échec d'alignement avec les serveurs cloud:", e);
+            // Gracefully load local storage to avoid white screens
+            loadLocalFallback(user.uid);
             setLoadingCloud(false);
             setAuthResolving(false);
           }
         } else {
           // Logged out: fallback to Local Storage data
-          unsubscribeTrades();
+          if (unsubscribeTrades) unsubscribeTrades();
+          if (unsubscribeUser) unsubscribeUser();
           loadLocalFallback();
           setAuthResolving(false);
         }
@@ -232,7 +281,8 @@ export default function App() {
 
       return () => {
         authUnsubscribe();
-        unsubscribeTrades();
+        if (unsubscribeTrades) unsubscribeTrades();
+        if (unsubscribeUser) unsubscribeUser();
       };
     } else {
       // Offline Local Fallback
@@ -241,69 +291,116 @@ export default function App() {
     }
   }, []);
 
-  const loadLocalFallback = () => {
-    const localCapital = localStorage.getItem('trading_capital');
-    const localCurrency = localStorage.getItem('trading_currency');
-    const localStoredTrades = localStorage.getItem('trading_journal_trades');
-    const localAccounts = localStorage.getItem('trading_accounts');
-    const localActiveAcc = localStorage.getItem('trading_active_account_id');
+  const loadLocalFallback = (userUid?: string) => {
+    const keySuffix = userUid ? `_${userUid}` : '';
+    
+    const localCapital = localStorage.getItem(`trading_capital${keySuffix}`) || localStorage.getItem('trading_capital');
+    const localCurrency = localStorage.getItem(`trading_currency${keySuffix}`) || localStorage.getItem('trading_currency');
+    const localStoredTrades = localStorage.getItem(`trading_journal_trades${keySuffix}`) || localStorage.getItem('trading_journal_trades');
+    const localAccounts = localStorage.getItem(`trading_accounts${keySuffix}`) || localStorage.getItem('trading_accounts');
+    const localActiveAcc = localStorage.getItem(`trading_active_account_id${keySuffix}`) || localStorage.getItem('trading_active_account_id');
 
     if (localAccounts) {
-      setAccounts(JSON.parse(localAccounts));
+      try {
+        setAccounts(JSON.parse(localAccounts));
+      } catch (_) {
+        setAccounts([]);
+      }
+    } else {
+      const defaultAccs: TradingAccount[] = [
+        {
+          id: "default-propfirm",
+          name: "Compte Principal (PropFirm)",
+          type: "PROPFIRM",
+          firmOrBrokerName: "FTMO",
+          startingBalance: 100000,
+          currency: "USD",
+          createdAt: new Date().toISOString()
+        }
+      ];
+      setAccounts(defaultAccs);
+      localStorage.setItem(`trading_accounts${keySuffix}`, JSON.stringify(defaultAccs));
     }
+
     if (localActiveAcc) {
       setActiveAccountId(localActiveAcc);
+    } else {
+      setActiveAccountId("default-propfirm");
     }
 
-    if (localCapital) setStartingBalance(parseFloat(localCapital));
-    if (localCurrency) setCurrency(localCurrency);
+    if (localCapital) {
+      setStartingBalance(parseFloat(localCapital));
+    } else {
+      setStartingBalance(100000);
+    }
+
+    if (localCurrency) {
+      setCurrency(localCurrency);
+    } else {
+      setCurrency('USD');
+    }
 
     if (localStoredTrades) {
-      setTrades(JSON.parse(localStoredTrades));
+      try {
+        setTrades(JSON.parse(localStoredTrades));
+      } catch (_) {
+        setTrades([]);
+      }
     } else {
       // Set default mocks so workspace looks instantly engaging!
       setTrades(DEFAULT_TRADES);
-      localStorage.setItem('trading_journal_trades', JSON.stringify(DEFAULT_TRADES));
+      localStorage.setItem(`trading_journal_trades${keySuffix}`, JSON.stringify(DEFAULT_TRADES));
     }
   };
 
   // Write variables back when in Local Fallback context
   const saveLocalState = (updatedTrades: Trade[], cap: number, curr: string, accs?: TradingAccount[], activeAccId?: string) => {
-    if (!currentUser) {
-      localStorage.setItem('trading_journal_trades', JSON.stringify(updatedTrades));
-      localStorage.setItem('trading_capital', String(cap));
-      localStorage.setItem('trading_currency', curr);
+    const keySuffix = currentUser ? `_${currentUser.uid}` : '';
+    
+    try {
+      localStorage.setItem(`trading_journal_trades${keySuffix}`, JSON.stringify(updatedTrades));
+      localStorage.setItem(`trading_capital${keySuffix}`, String(cap));
+      localStorage.setItem(`trading_currency${keySuffix}`, curr);
       
       const accountsToSave = accs !== undefined ? accs : accounts;
       const activeIdToSave = activeAccId !== undefined ? activeAccId : activeAccountId;
+      localStorage.setItem(`trading_accounts${keySuffix}`, JSON.stringify(accountsToSave));
+      localStorage.setItem(`trading_active_account_id${keySuffix}`, activeIdToSave);
+
+      // Also sync to general keys so it remains accessible as standard fallback
+      localStorage.setItem('trading_journal_trades', JSON.stringify(updatedTrades));
+      localStorage.setItem('trading_capital', String(cap));
+      localStorage.setItem('trading_currency', curr);
       localStorage.setItem('trading_accounts', JSON.stringify(accountsToSave));
       localStorage.setItem('trading_active_account_id', activeIdToSave);
+    } catch (e) {
+      console.error("Erreur d'écriture localStorage:", e);
     }
   };
 
   const handleUpdateCapital = async (newVal: number) => {
-    setStartingBalance(newVal);
-    saveLocalState(trades, newVal, currency);
-
     if (currentUser && isConfigured) {
       try {
-        await setDoc(doc(db, 'users', currentUser.uid), { startingBalance: newVal }, { merge: true });
+        await setDoc(doc(db, 'users', currentUser.uid), sanitizeFirestoreData({ startingBalance: newVal }), { merge: true });
       } catch (err) {
-        handleFirestoreError(err, OperationType.UPDATE, `users/${currentUser.uid}`);
+        console.error("Échec de mise à jour du capital sur Firestore:", err);
       }
+    } else {
+      setStartingBalance(newVal);
+      saveLocalState(trades, newVal, currency);
     }
   };
 
   const handleUpdateCurrency = async (newCurr: string) => {
-    setCurrency(newCurr);
-    saveLocalState(trades, startingBalance, newCurr, accounts, activeAccountId);
-
     if (currentUser && isConfigured) {
       try {
-        await setDoc(doc(db, 'users', currentUser.uid), { currency: newCurr }, { merge: true });
+        await setDoc(doc(db, 'users', currentUser.uid), sanitizeFirestoreData({ currency: newCurr }), { merge: true });
       } catch (err) {
-        handleFirestoreError(err, OperationType.UPDATE, `users/${currentUser.uid}`);
+        console.error("Échec de mise à jour de la devise sur Firestore:", err);
       }
+    } else {
+      setCurrency(newCurr);
+      saveLocalState(trades, startingBalance, newCurr, accounts, activeAccountId);
     }
   };
 
@@ -313,25 +410,24 @@ export default function App() {
   };
 
   const handleSelectAccount = async (id: string) => {
-    setActiveAccountId(id);
     const selected = accounts.find(a => a.id === id);
-    if (selected) {
-      setStartingBalance(selected.startingBalance);
-      setCurrency(selected.currency);
-    }
-
-    saveLocalState(trades, selected?.startingBalance || startingBalance, selected?.currency || currency, accounts, id);
-
     if (currentUser && isConfigured) {
       try {
-        await setDoc(doc(db, 'users', currentUser.uid), { 
+        await setDoc(doc(db, 'users', currentUser.uid), sanitizeFirestoreData({ 
           activeAccountId: id,
           startingBalance: selected?.startingBalance || startingBalance,
           currency: selected?.currency || currency
-        }, { merge: true });
+        }), { merge: true });
       } catch (err) {
-        handleFirestoreError(err, OperationType.UPDATE, `users/${currentUser.uid}`);
+        console.error("Échec de sélection du compte sur Firestore:", err);
       }
+    } else {
+      setActiveAccountId(id);
+      if (selected) {
+        setStartingBalance(selected.startingBalance);
+        setCurrency(selected.currency);
+      }
+      saveLocalState(trades, selected?.startingBalance || startingBalance, selected?.currency || currency, accounts, id);
     }
   };
 
@@ -347,31 +443,30 @@ export default function App() {
     };
 
     const updatedAccs = [...accounts, newAcc];
-    setAccounts(updatedAccs);
-    setActiveAccountId(newAcc.id);
-    setStartingBalance(startingBalanceVal);
-    setCurrency(currencyVal);
-
-    saveLocalState(trades, startingBalanceVal, currencyVal, updatedAccs, newAcc.id);
 
     if (currentUser && isConfigured) {
       try {
-        await setDoc(doc(db, 'users', currentUser.uid), { 
+        await setDoc(doc(db, 'users', currentUser.uid), sanitizeFirestoreData({ 
           accounts: updatedAccs, 
           activeAccountId: newAcc.id,
           startingBalance: startingBalanceVal,
           currency: currencyVal
-        }, { merge: true });
+        }), { merge: true });
       } catch (err) {
-        handleFirestoreError(err, OperationType.UPDATE, `users/${currentUser.uid}`);
+        console.error("Échec d'ajout de compte sur Firestore:", err);
       }
+    } else {
+      setAccounts(updatedAccs);
+      setActiveAccountId(newAcc.id);
+      setStartingBalance(startingBalanceVal);
+      setCurrency(currencyVal);
+      saveLocalState(trades, startingBalanceVal, currencyVal, updatedAccs, newAcc.id);
     }
   };
 
   const handleDeleteAccount = async (id: string) => {
     if (accounts.length <= 1) return;
     const updatedAccs = accounts.filter(a => a.id !== id);
-    setAccounts(updatedAccs);
     
     let newActiveId = activeAccountId;
     let newCapital = startingBalance;
@@ -380,37 +475,37 @@ export default function App() {
     if (activeAccountId === id) {
       const fallbackAcc = updatedAccs[0];
       newActiveId = fallbackAcc.id;
-      setActiveAccountId(newActiveId);
       newCapital = fallbackAcc.startingBalance;
       newCurrVal = fallbackAcc.currency;
-      setStartingBalance(newCapital);
-      setCurrency(newCurrVal);
     }
 
-    // Also delete any trades linked to the deleted account to make it clean & pristine
     const updatedTrades = trades.filter(t => t.accountId !== id);
-    setTrades(updatedTrades);
-
-    saveLocalState(updatedTrades, newCapital, newCurrVal, updatedAccs, newActiveId);
 
     if (currentUser && isConfigured) {
       try {
-        await setDoc(doc(db, 'users', currentUser.uid), { 
-          accounts: updatedAccs, 
-          activeAccountId: newActiveId,
-          startingBalance: newCapital,
-          currency: newCurrVal
-        }, { merge: true });
-
-        // Batch delete associated trades on the private Cloud server
+        // 1. Delete associated trades from Firestore in background
         const collectionToRemove = trades.filter(t => t.accountId === id);
         for (const t of collectionToRemove) {
           await deleteDoc(doc(db, 'users', currentUser.uid, 'trades', t.id));
         }
 
+        // 2. Update user profile document on Firestore
+        await setDoc(doc(db, 'users', currentUser.uid), sanitizeFirestoreData({ 
+          accounts: updatedAccs, 
+          activeAccountId: newActiveId,
+          startingBalance: newCapital,
+          currency: newCurrVal
+        }), { merge: true });
       } catch (err) {
-        handleFirestoreError(err, OperationType.UPDATE, `users/${currentUser.uid}`);
+        console.error("Échec de suppression du compte sur Firestore:", err);
       }
+    } else {
+      setAccounts(updatedAccs);
+      setActiveAccountId(newActiveId);
+      setStartingBalance(newCapital);
+      setCurrency(newCurrVal);
+      setTrades(updatedTrades);
+      saveLocalState(updatedTrades, newCapital, newCurrVal, updatedAccs, newActiveId);
     }
   };
 
@@ -425,44 +520,44 @@ export default function App() {
       createdAt: new Date().toISOString()
     };
 
-    const updated = [trade, ...trades];
-    setTrades(updated);
-    saveLocalState(updated, startingBalance, currency, accounts, activeAccountId);
-
     if (currentUser && isConfigured) {
       try {
-        await setDoc(doc(db, 'users', currentUser.uid, 'trades', id), trade);
+        await setDoc(doc(db, 'users', currentUser.uid, 'trades', id), sanitizeFirestoreData(trade));
       } catch (err) {
-        handleFirestoreError(err, OperationType.CREATE, `users/${currentUser.uid}/trades/${id}`);
+        console.error("Échec d'ajout du trade sur Firestore:", err);
       }
+    } else {
+      const updated = [trade, ...trades];
+      setTrades(updated);
+      saveLocalState(updated, startingBalance, currency, accounts, activeAccountId);
     }
   };
 
   const handleUpdateTrade = async (id: string, updatedFields: Partial<Trade>) => {
-    const updated = trades.map(t => t.id === id ? { ...t, ...updatedFields } : t);
-    setTrades(updated);
-    saveLocalState(updated, startingBalance, currency);
-
     if (currentUser && isConfigured) {
       try {
-        await setDoc(doc(db, 'users', currentUser.uid, 'trades', id), updatedFields, { merge: true });
+        await setDoc(doc(db, 'users', currentUser.uid, 'trades', id), sanitizeFirestoreData(updatedFields), { merge: true });
       } catch (err) {
-        handleFirestoreError(err, OperationType.UPDATE, `users/${currentUser.uid}/trades/${id}`);
+        console.error("Échec de mise à jour du trade sur Firestore:", err);
       }
+    } else {
+      const updated = trades.map(t => t.id === id ? { ...t, ...updatedFields } : t);
+      setTrades(updated);
+      saveLocalState(updated, startingBalance, currency);
     }
   };
 
   const handleDeleteTrade = async (id: string) => {
-    const updated = trades.filter(t => t.id !== id);
-    setTrades(updated);
-    saveLocalState(updated, startingBalance, currency);
-
     if (currentUser && isConfigured) {
       try {
         await deleteDoc(doc(db, 'users', currentUser.uid, 'trades', id));
       } catch (err) {
-        handleFirestoreError(err, OperationType.DELETE, `users/${currentUser.uid}/trades/${id}`);
+        console.error("Échec de suppression du trade sur Firestore:", err);
       }
+    } else {
+      const updated = trades.filter(t => t.id !== id);
+      setTrades(updated);
+      saveLocalState(updated, startingBalance, currency);
     }
   };
 
@@ -477,11 +572,11 @@ export default function App() {
     if (currentUser && isConfigured) {
       // Sync whole array recursively to Cloud database
       try {
-        await setDoc(doc(db, 'users', currentUser.uid), { startingBalance: cap, currency: curr }, { merge: true });
+        await setDoc(doc(db, 'users', currentUser.uid), sanitizeFirestoreData({ startingBalance: cap, currency: curr }), { merge: true });
         // Add all trades
         for (const t of restoredTrades) {
           const syncedTrade = { ...t, userId: currentUser.uid };
-          await setDoc(doc(db, 'users', currentUser.uid, 'trades', t.id), syncedTrade);
+          await setDoc(doc(db, 'users', currentUser.uid, 'trades', t.id), sanitizeFirestoreData(syncedTrade));
         }
       } catch (e) {
         console.error("Échec d'exportation vers Firebase.", e);

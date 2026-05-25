@@ -140,3 +140,31 @@ export async function testConnection() {
 if (isConfigured) {
   testConnection();
 }
+
+/**
+ * Removes undefined values recursively from objects and arrays so they are valid for Firestore.
+ */
+export function sanitizeFirestoreData<T extends Record<string, any>>(obj: T): T {
+  const result: any = {};
+  for (const key in obj) {
+    if (Object.prototype.hasOwnProperty.call(obj, key)) {
+      const val = obj[key];
+      if (val !== undefined) {
+        if (val !== null && typeof val === 'object' && !Array.isArray(val) && !((val as any) instanceof Date)) {
+          result[key] = sanitizeFirestoreData(val);
+        } else if (Array.isArray(val)) {
+          result[key] = val.map(item => {
+            if (item !== null && typeof item === 'object' && !Array.isArray(item) && !((item as any) instanceof Date)) {
+              return sanitizeFirestoreData(item);
+            }
+            return item === undefined ? null : item; // Firestore supports null but not undefined
+          });
+        } else {
+          result[key] = val;
+        }
+      }
+    }
+  }
+  return result as T;
+}
+
