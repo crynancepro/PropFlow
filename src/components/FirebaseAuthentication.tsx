@@ -6,6 +6,7 @@ import {
   loginWithGoogle, 
   isConfigured 
 } from '../firebase-setup';
+import firebaseConfig from '../firebase-applet-config.json';
 import { Language, TRANSLATIONS } from '../utils/i18n';
 import { 
   Mail, Lock, ShieldCheck, AlertTriangle, CheckCircle2, 
@@ -38,12 +39,14 @@ export default function FirebaseAuthentication({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [isOperationNotAllowed, setIsOperationNotAllowed] = useState(false);
+  const [isInvalidApiKey, setIsInvalidApiKey] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
     setSuccessMessage(null);
     setIsOperationNotAllowed(false);
+    setIsInvalidApiKey(false);
 
     if (!email || !password) {
       setErrorMessage(
@@ -181,6 +184,13 @@ export default function FirebaseAuthentication({
             ? "Email & password authentication is disabled. Please enable it in the Firebase console." 
             : "L'authentification par email/mot de passe n'est pas activée. Activez-la dans votre Console Firebase."
         );
+      } else if (errorCode.includes('api-key-not-valid') || errorCode.includes('invalid-api-key')) {
+        setIsInvalidApiKey(true);
+        setErrorMessage(
+          language === 'en'
+            ? "Firebase configuration error: The API key provided is invalid."
+            : "Erreur de configuration Firebase : La clé d'API fournie est invalide."
+        );
       } else {
         setErrorMessage(err.message || String(err));
       }
@@ -190,6 +200,7 @@ export default function FirebaseAuthentication({
   const handleGoogleLoginClick = async () => {
     setErrorMessage(null);
     setSuccessMessage(null);
+    setIsInvalidApiKey(false);
     setIsLoading(true);
     try {
       if (!isConfigured) {
@@ -230,7 +241,18 @@ export default function FirebaseAuthentication({
       }, 1500);
     } catch (err: any) {
       setIsLoading(false);
-      setErrorMessage(err.message || String(err));
+      console.error(err);
+      const errorCode = err.code || err.message || '';
+      if (errorCode.includes('api-key-not-valid') || errorCode.includes('invalid-api-key')) {
+        setIsInvalidApiKey(true);
+        setErrorMessage(
+          language === 'en'
+            ? "Firebase configuration error: The API key provided is invalid."
+            : "Erreur de configuration Firebase : La clé d'API fournie est invalide."
+        );
+      } else {
+        setErrorMessage(err.message || String(err));
+      }
     }
   };
 
@@ -325,7 +347,7 @@ export default function FirebaseAuthentication({
                       <li>
                         {language === 'en' ? 'Click on ' : 'Cliquez sur '}
                         <a 
-                          href="https://console.firebase.google.com/project/ungoogly-pulsar-nv8b6/authentication/providers" 
+                          href={`https://console.firebase.google.com/project/${firebaseConfig.projectId || 'propflow-fdc96'}/authentication/providers`}
                           target="_blank" 
                           rel="noopener noreferrer" 
                           className="text-sky-400 hover:underline font-bold inline-flex items-center gap-1"
@@ -386,6 +408,83 @@ export default function FirebaseAuthentication({
                         className="w-full bg-[#0ea5e9]/10 hover:bg-[#0ea5e9]/20 border border-[#0ea5e9]/30 hover:border-[#0ea5e9]/55 text-[#0ea5e9] hover:text-sky-300 font-bold py-2 px-3 rounded-lg text-xs transition-all cursor-pointer text-center font-mono uppercase tracking-wider"
                       >
                         {language === 'en' ? '⚡ Continue Offline (Demo)' : '⚡ Continuer Hors-ligne (Démo)'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {isInvalidApiKey && (
+                  <div className="mt-2 pt-2.5 border-t border-rose-500/10 text-[11px] text-slate-300 space-y-2">
+                    <p className="font-semibold text-amber-400">
+                      {language === 'en' 
+                        ? "🔧 HOW TO FIX THE INVALID API KEY:" 
+                        : "🔧 COMMENT SÉCURISER VOTRE CLÉ D'API :"}
+                    </p>
+                    <ol className="list-decimal list-inside space-y-1.5 font-sans leading-relaxed text-slate-400 pl-1 list-none">
+                      <li className="flex gap-1 items-start">
+                        <span className="font-bold text-amber-500">1.</span>
+                        <span>
+                          {language === 'en' 
+                            ? "Double check your 'src/firebase-applet-config.json' file contents. Ensure the copied 'apiKey' value is exactly correct and does not contain typographical errors (like '8' instead of 'S')." 
+                            : "Vérifiez le contenu de 'src/firebase-applet-config.json'. Assurez-vous d'avoir copié la clé d'API exacte sans espace ni confusion optique (ex: '8' au lieu de 'S')."}
+                        </span>
+                      </li>
+                      <li className="flex gap-1 items-start mt-1">
+                        <span className="font-bold text-amber-500">2.</span>
+                        <span>
+                          {language === 'en' 
+                            ? "Go to the Google Cloud Credentials Console: " 
+                            : "Vérifiez vos restrictions d'API sur la console Google Cloud : "}
+                          <a 
+                            href={`https://console.cloud.google.com/apis/credentials?project=${firebaseConfig.projectId || 'propflow-fdc96'}`}
+                            target="_blank" 
+                            rel="noopener noreferrer" 
+                            className="text-sky-400 hover:underline font-bold inline-flex items-center gap-1"
+                          >
+                            console.cloud.google.com
+                          </a>
+                        </span>
+                      </li>
+                      <li className="flex gap-1 items-start mt-1">
+                        <span className="font-bold text-amber-500">3.</span>
+                        <span>
+                          {language === 'en' 
+                            ? "Select API Key -> Edit and check that 'Identity Toolkit API' is enabled inside 'API Restrictions'. If restrictions are enabled but 'Identity Toolkit API' is unchecked, calls will fail." 
+                            : "Cliquez sur votre clé de navigateur, puis assurez-vous que 'Identity Toolkit API' est autorisée dans les 'Restrictions relatives aux API'. Sinon, décochez la restriction d'API le temps de tester."}
+                        </span>
+                      </li>
+                    </ol>
+                    <div className="mt-3 pt-2.5 border-t border-rose-500/10 flex flex-col gap-1.5">
+                      <p className="text-[10px] text-slate-400">
+                        {language === 'en' 
+                          ? "Want to bypass and continue with local state?" 
+                          : "Vous préférez utiliser le mode local isolé immédiatement ?"}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsLoading(true);
+                          const demoUser = {
+                            uid: `demo-local-${email ? email.replace(/[^a-zA-Z0-9]/g, '') : 'fallback'}`,
+                            email: email || 'offline-trader@trade.local',
+                            displayName: email ? email.split('@')[0] : 'Offline Trader'
+                          };
+                          setSuccessMessage(
+                            language === 'en' 
+                              ? "[LOCAL STORAGE] Switched to offline database!" 
+                              : "[LOCAL STORAGE] Basculement sur la base de données locale !"
+                          );
+                          setTimeout(() => {
+                            setIsLoading(false);
+                            if (onAuthSuccess) {
+                              onAuthSuccess(demoUser);
+                            }
+                            if (onClose) onClose();
+                          }, 1500);
+                        }}
+                        className="w-full bg-[#0ea5e9]/10 hover:bg-[#0ea5e9]/20 border border-[#0ea5e9]/30 hover:border-[#0ea5e9]/55 text-[#0ea5e9] hover:text-sky-300 font-bold py-2 px-3 rounded-lg text-xs transition-all cursor-pointer text-center font-mono uppercase tracking-wider"
+                      >
+                        {language === 'en' ? '⚡ Use Offline Local State' : '⚡ Utiliser le Mode Hors-ligne'}
                       </button>
                     </div>
                   </div>
@@ -509,6 +608,38 @@ export default function FirebaseAuthentication({
                 </span>
                 {!isLoading && <ArrowRight className="w-4 h-4" />}
               </button>
+              
+              {/* Immediate Local Bypass Option */}
+              <div className="mt-3 flex justify-center text-center">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsLoading(true);
+                    const demoUser = {
+                      uid: `local-user-${email ? email.replace(/[^a-zA-Z0-9]/g, '') : 'trader'}`,
+                      email: email || 'local-trader@propflow.local',
+                      displayName: email ? email.split('@')[0] : 'Local Trader'
+                    };
+                    setSuccessMessage(
+                      language === 'en' 
+                        ? "Entering Local Mode (Data saved on your browser)..." 
+                        : "Accès en mode Local (Données sauvegardées sur votre navigateur)..."
+                    );
+                    setTimeout(() => {
+                      setIsLoading(false);
+                      if (onAuthSuccess) {
+                        onAuthSuccess(demoUser);
+                      }
+                      if (onClose) onClose();
+                    }, 1200);
+                  }}
+                  className="text-[11px] text-slate-400 hover:text-sky-400 font-mono font-bold tracking-wider hover:underline transition-all cursor-pointer flex items-center justify-center gap-1 bg-white/5 py-1.5 px-3 rounded-lg border border-white/5 w-full justify-center"
+                >
+                  ⚡ {language === 'en' 
+                    ? "USE OFFLINE LOCAL STORAGE DIRECTLY" 
+                    : "UTILISER LE MODE LOCAL HORS-LIGNE DIRECTEMENT"}
+                </button>
+              </div>
             </form>
 
             {/* Spacer */}

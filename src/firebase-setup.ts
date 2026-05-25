@@ -9,18 +9,25 @@ import {
   type User as FirebaseUser 
 } from 'firebase/auth';
 import { getFirestore, doc, getDocFromServer } from 'firebase/firestore';
-import firebaseConfig from './firebase-applet-config.json';
+const firebaseConfig = {
+  projectId: "propflow-fdc96",
+  appId: "1:888284730771:web:5296107073e91cffa4466",
+  apiKey: "AIzaSyBGpLezZqKDTw103i-WA2EGiuXYABix6oI",
+  authDomain: "propflow-fdc96.firebaseapp.com",
+  storageBucket: "propflow-fdc96.firebasestorage.app",
+  messagingSenderId: "888284730771",
+  measurementId: "G-3GD6D3NWPN"
+};
 
 let app: any;
 let db: any;
 let auth: any;
 let isConfigured = false;
 
-// Check if the config is still a placeholder
-if (firebaseConfig && firebaseConfig.apiKey && firebaseConfig.apiKey !== 'placeholder-api-key') {
+if (firebaseConfig && firebaseConfig.apiKey) {
   try {
     app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
-    db = getFirestore(app, firebaseConfig.firestoreDatabaseId || '(default)');
+    db = getFirestore(app);
     auth = getAuth(app);
     isConfigured = true;
     console.log("Firebase connecté avec succès.");
