@@ -21,7 +21,8 @@ export default function MarketAlerts({ onCopyOpportunityToJournal }: MarketAlert
         headers: { "Content-Type": "application/json" }
       });
       if (!resp.ok) {
-        throw new Error("Impossible de récupérer les signaux d'opportunités.");
+        const errData = await resp.json().catch(() => ({}));
+        throw new Error(errData.error || "Impossible de récupérer les signaux d'opportunités.");
       }
       const data = await resp.json();
       if (data.opportunities && Array.isArray(data.opportunities)) {

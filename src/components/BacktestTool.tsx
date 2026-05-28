@@ -31,7 +31,8 @@ export default function BacktestTool() {
       });
 
       if (!resp.ok) {
-        throw new Error("L'IA a échoué à exécuter la simulation de backtest. Vérifiez vos variables.");
+        const errData = await resp.json().catch(() => ({}));
+        throw new Error(errData.error || "L'IA a échoué à exécuter la simulation de backtest. Vérifiez vos variables.");
       }
 
       const result = await resp.json();

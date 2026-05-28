@@ -17,6 +17,7 @@ export interface UserProfile {
   riskPerTrade: number; // default risk percentage (e.g. 1%)
   createdAt: string;
   updatedAt?: string;
+  isPremium?: boolean; // Premium status from NOWPayments or manual toggle
 }
 
 export type TradeDirection = 'BUY' | 'SELL';

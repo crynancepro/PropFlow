@@ -12,17 +12,19 @@ import DataTicker from './components/DataTicker';
 import EconomicNewsAnalysis from './components/EconomicNewsAnalysis';
 import WorkspaceLinks from './components/WorkspaceLinks';
 import FirebaseAuthentication from './components/FirebaseAuthentication';
+import { createPremiumInvoice } from './services/nowpayments';
+import PremiumPage from './pages/Premium';
 
 import { 
   auth, db, isConfigured, loginWithGoogle, logoutUser, handleFirestoreError, OperationType, sanitizeFirestoreData 
 } from './firebase-setup';
-import { doc, setDoc, getDoc, collection, onSnapshot, deleteDoc, updateDoc } from 'firebase/firestore';
+import { doc, setDoc, getDoc, collection, onSnapshot, deleteDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { onAuthStateChanged, type User as FirebaseUser } from 'firebase/auth';
 
 import { 
   TrendingUp, BarChart2, BookOpen, BrainCircuit, PlayCircle, ShieldCheck, 
   Settings, LogIn, LogOut, RefreshCw, HelpCircle, BadgeCheck, DollarSign, Globe, Monitor,
-  Sun, Moon
+  Sun, Moon, Crown
 } from 'lucide-react';
 
 const DEFAULT_TRADES: Trade[] = [
@@ -96,7 +98,7 @@ const DEFAULT_TRADES: Trade[] = [
 ];
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'STATS' | 'JOURNAL' | 'NEWS' | 'WORKSPACE' | 'OPPORTUNITIES' | 'BACKTEST' | 'COACH' | 'SECURITY'>('STATS');
+  const [activeTab, setActiveTab] = useState<'STATS' | 'JOURNAL' | 'NEWS' | 'WORKSPACE' | 'OPPORTUNITIES' | 'BACKTEST' | 'COACH' | 'SECURITY' | 'PREMIUM'>('STATS');
   const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
   const [demoUser, setDemoUser] = useState<{ uid: string; email: string; displayName?: string } | null>(() => {
     const saved = localStorage.getItem('trading_demo_user');
@@ -143,6 +145,8 @@ export default function App() {
   // User configs
   const [startingBalance, setStartingBalance] = useState<number>(100000);
   const [currency, setCurrency] = useState<string>('USD');
+  const [isPremium, setIsPremium] = useState<boolean>(false);
+  const [userCreatedAt, setUserCreatedAt] = useState<string | null>(null);
   const [trades, setTrades] = useState<Trade[]>([]);
   const [loadingCloud, setLoadingCloud] = useState<boolean>(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false);
@@ -183,6 +187,28 @@ export default function App() {
                 if (userData.activeAccountId !== undefined) {
                   setActiveAccountId(userData.activeAccountId);
                 }
+                if (userData.isPremium !== undefined) {
+                  setIsPremium(userData.isPremium);
+                } else {
+                  setIsPremium(false);
+                }
+
+                if (userData.createdAt) {
+                  let dateStr = "";
+                  if (typeof userData.createdAt.toDate === "function") {
+                    dateStr = userData.createdAt.toDate().toISOString();
+                  } else {
+                    dateStr = String(userData.createdAt);
+                  }
+                  setUserCreatedAt(dateStr);
+                } else {
+                  // Sauvegarder la date d'inscription actuelle s'il n'y en a pas dans Firestore
+                  const nowStr = new Date().toISOString();
+                  setUserCreatedAt(nowStr);
+                  updateDoc(userDocRef, { createdAt: nowStr }).catch(err => {
+                    console.warn("Échec d'actualisation silencieuse de createdAt dans Firestore:", err);
+                  });
+                }
               } else {
                 // Initialize user document in cloud Firestore using current template/local data
                 const currentCap = parseFloat(localStorage.getItem('trading_capital') || '100000');
@@ -196,16 +222,20 @@ export default function App() {
                 }
                 const currentActiveId = localStorage.getItem('trading_active_account_id') || 'default-propfirm';
 
-                await setDoc(userDocRef, sanitizeFirestoreData({
-                  uid: user.uid,
-                  email: user.email,
-                  displayName: user.displayName,
-                  startingBalance: currentCap,
-                  currency: currentCurrVal,
-                  accounts: currentAccounts,
-                  activeAccountId: currentActiveId,
-                  createdAt: new Date().toISOString()
-                }));
+                const nowIsoString = new Date().toISOString();
+                await setDoc(userDocRef, {
+                  ...sanitizeFirestoreData({
+                    uid: user.uid,
+                    email: user.email,
+                    displayName: user.displayName,
+                    startingBalance: currentCap,
+                    currency: currentCurrVal,
+                    accounts: currentAccounts,
+                    activeAccountId: currentActiveId,
+                    isPremium: false,
+                    createdAt: nowIsoString
+                  })
+                });
               }
             }, (err) => {
               console.error("Échec du chargement en temps réel du profil utilisateur:", err);
@@ -291,6 +321,33 @@ export default function App() {
     }
   }, []);
 
+  // NOWPayments URL Redirect parameter checker (for instant Premium status activation)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('payment') === 'success') {
+      const activeUserUid = activeUser?.uid || 'local';
+      
+      // Update in Local Storage immediately for local resilience
+      localStorage.setItem(`trading_premium_local_${activeUserUid}`, 'true');
+      setIsPremium(true);
+      
+      // Update in cloud Firestore in background if available
+      if (isConfigured && db && activeUser && activeUser.uid !== 'local') {
+        const userDocRef = doc(db, 'users', activeUser.uid);
+        updateDoc(userDocRef, { isPremium: true }).catch(err => {
+          console.warn("Échec d'actualisation de l'abonnement dans Firestore client-side:", err);
+        });
+      }
+      
+      alert("Félicitations ! Votre abonnement PropFlow Premium a été validé avec succès ! Profitez de tous vos outils de trading avancés.");
+      // Clean query parameters so they don't re-trigger alert on page refreshes
+      window.history.replaceState({}, document.title, window.location.pathname);
+    } else if (params.get('payment') === 'cancel') {
+      alert("Le paiement a été annulé par l'utilisateur.");
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+  }, [activeUser, isConfigured]);
+
   const loadLocalFallback = (userUid?: string) => {
     const keySuffix = userUid ? `_${userUid}` : '';
     
@@ -351,6 +408,17 @@ export default function App() {
       setTrades(DEFAULT_TRADES);
       localStorage.setItem(`trading_journal_trades${keySuffix}`, JSON.stringify(DEFAULT_TRADES));
     }
+
+    const localPremiumVal = localStorage.getItem(`trading_premium_local_${userUid || 'local'}`) === 'true';
+    setIsPremium(localPremiumVal);
+
+    const trialStartedKey = `trading_trial_started_${userUid || 'local'}`;
+    let trialStart = localStorage.getItem(trialStartedKey);
+    if (!trialStart) {
+      trialStart = new Date().toISOString();
+      localStorage.setItem(trialStartedKey, trialStart);
+    }
+    setUserCreatedAt(trialStart);
   };
 
   // Write variables back when in Local Fallback context
@@ -659,6 +727,59 @@ export default function App() {
     );
   }
 
+  // Garde-fou (middleware) vérifiant l'accès à chaque chargement/affichage de page
+  const isTrialExpired = (() => {
+    // Si l'utilisateur est Premium, il accède à l'intégralité du site sans restriction
+    if (isPremium) return false;
+    
+    // Déterminer la date de création du compte (createdAt)
+    let startMs = 0;
+    if (userCreatedAt) {
+      try {
+        startMs = new Date(userCreatedAt).getTime();
+      } catch (_) {}
+    }
+    
+    // Secours local si la date de création distante est absente ou non encore chargée
+    if (!startMs && activeUser) {
+      const trialStartedKey = `trading_trial_started_${activeUser.uid}`;
+      const localStart = localStorage.getItem(trialStartedKey);
+      if (localStart) {
+        try {
+          startMs = new Date(localStart).getTime();
+        } catch (_) {}
+      } else {
+        const nowStr = new Date().toISOString();
+        localStorage.setItem(trialStartedKey, nowStr);
+        startMs = Date.now();
+      }
+    }
+    
+    if (!startMs) return false;
+    
+    // Calculer la différence entre la date actuelle et la date d'inscription (createdAt)
+    const trialDurationMs = 3 * 24 * 60 * 60 * 1000; // 3 jours (soit 72 heures)
+    const elapsedMs = Date.now() - startMs;
+    
+    // Si plus de 72 heures se sont écoulées et qu'il n'a pas payé, on bloque l'accès
+    return elapsedMs > trialDurationMs;
+  })();
+
+  // Middleware Redirection : si la période d'essai de 72h a expiré et qu'il n'a pas payé,
+  // on bloque l'accès au tableau de bord et on le redirige vers l'interface de paiement unique.
+  if (isTrialExpired) {
+    return (
+      <PremiumPage 
+        userId={activeUser?.uid || 'local'}
+        userEmail={activeUser?.email}
+        createdAt={userCreatedAt}
+        currency={currency}
+        isExpired={true}
+        onLogout={handleSignOut}
+      />
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#0A0B0D] text-slate-200 font-sans tracking-tight">
       
@@ -692,6 +813,24 @@ export default function App() {
 
           {/* Quick configs parameters and Sync state */}
           <div className="flex flex-wrap items-center gap-4">
+            
+            {/* NOWPayments Monetization Premium system */}
+            {isPremium ? (
+              <span 
+                onClick={() => setActiveTab('PREMIUM')}
+                className="flex items-center gap-1.5 bg-gradient-to-r from-amber-500/15 via-yellow-500/10 to-amber-500/5 border border-amber-500/30 px-3 py-1.5 rounded-xl text-[10px] font-black tracking-wider text-amber-400 font-mono select-none shadow-[0_0_15px_rgba(245,158,11,0.15)] cursor-pointer hover:scale-[1.03] active:scale-[0.97] transition-all duration-300"
+              >
+                👑 PREMIUM
+              </span>
+            ) : (
+              <button
+                onClick={() => setActiveTab('PREMIUM')}
+                className="flex items-center gap-1.5 bg-gradient-to-r from-amber-500/20 via-yellow-500/25 to-amber-500/10 hover:from-amber-500/35 hover:to-yellow-500/35 border border-amber-500/35 hover:border-amber-400 px-3.5 py-1.5 rounded-xl text-[10px] font-black tracking-wider text-amber-300 hover:text-white transition-all duration-300 shadow-[0_0_15px_rgba(245,158,11,0.08)] cursor-pointer hover:scale-[1.03] active:scale-[0.97] animate-pulse"
+                title="Devenir Premium (Monétisation PropFlow)"
+              >
+                👑 DEVENIR PREMIUM
+              </button>
+            )}
             
             {/* Language Selection Toggle */}
             <div className="flex items-center gap-1.5 bg-[#161B22] border border-white/5 px-2.5 py-1 rounded-lg">
@@ -793,7 +932,8 @@ export default function App() {
               { id: 'OPPORTUNITIES', label: TRANSLATIONS[language].tabAlerts, icon: TrendingUp, color: 'text-rose-400' },
               { id: 'BACKTEST', label: TRANSLATIONS[language].tabBacktesting, icon: PlayCircle, color: 'text-amber-400' },
               { id: 'COACH', label: TRANSLATIONS[language].tabCoach, icon: BrainCircuit, color: 'text-purple-400' },
-              { id: 'SECURITY', label: TRANSLATIONS[language].tabSecurity, icon: Settings, color: 'text-slate-400' }
+              { id: 'SECURITY', label: TRANSLATIONS[language].tabSecurity, icon: Settings, color: 'text-slate-400' },
+              { id: 'PREMIUM', label: '👑 Premium', icon: Crown, color: 'text-amber-400 font-black' }
             ].map((tab) => {
               const IconComp = tab.icon;
               const isActive = activeTab === tab.id;
@@ -803,7 +943,9 @@ export default function App() {
                   onClick={() => setActiveTab(tab.id as any)}
                   className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold font-sans tracking-wide rounded-xl transition-all cursor-pointer ${
                     isActive 
-                      ? 'bg-gradient-to-r from-sky-500/10 to-sky-500/2 border border-sky-500/20 text-sky-400 shadow-[0_0_15px_rgba(14,165,233,0.08)]' 
+                      ? (tab.id === 'PREMIUM'
+                        ? 'bg-gradient-to-r from-amber-500/15 to-yellow-500/2 border border-amber-500/30 text-amber-400 shadow-[0_0_15px_rgba(245,158,11,0.12)]'
+                        : 'bg-gradient-to-r from-sky-500/10 to-sky-500/2 border border-sky-500/20 text-sky-400 shadow-[0_0_15px_rgba(14,165,233,0.08)]') 
                       : 'border border-transparent text-slate-400 hover:text-slate-200 hover:bg-white/3'
                   }`}
                 >
@@ -899,6 +1041,16 @@ export default function App() {
               currency={currency}
               isCloudSynced={!!currentUser}
               onRestoreData={handleRestoreDecryptData}
+            />
+          )}
+
+          {!loadingCloud && activeTab === 'PREMIUM' && (
+            <PremiumPage 
+              userId={activeUser?.uid || 'local'}
+              userEmail={activeUser?.email}
+              createdAt={userCreatedAt}
+              currency={currency}
+              isExpired={false}
             />
           )}
         </div>

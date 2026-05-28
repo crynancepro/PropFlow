@@ -88,7 +88,8 @@ export default function AICoach({ trades, startingBalance, currency }: AICoachPr
       });
 
       if (!resp.ok) {
-        throw new Error("L'IA n'a pas pu traiter l'historique du journal ou formuler le plan.");
+        const errData = await resp.json().catch(() => ({}));
+        throw new Error(errData.error || "L'IA n'a pas pu traiter l'historique du journal ou formuler le plan.");
       }
 
       const data = await resp.json();
