@@ -14,11 +14,45 @@ const PORT = 3000;
 
 // Lazy initialization of Gemini AI
 let aiClient: GoogleGenAI | null = null;
+let isGeminiKeyBlocked = false;
+
+function hasValidGeminiKey(): boolean {
+  if (isGeminiKeyBlocked) return false;
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) return false;
+  const normalized = apiKey.trim();
+  if (
+    normalized === "" || 
+    normalized === "MY_GEMINI_API_KEY" || 
+    normalized === "YOUR_GEMINI_API_KEY" ||
+    normalized.length < 15
+  ) {
+    return false;
+  }
+  return true;
+}
+
+function handleGeminiCallError(endpointName: string, error: any) {
+  const errStr = String(error?.message || error || "");
+  const isInvalidKey = errStr.includes("API key not valid") || 
+                       errStr.includes("API_KEY_INVALID") || 
+                       errStr.includes("API key expired") ||
+                       errStr.includes("INVALID_ARGUMENT") ||
+                       errStr.includes("API_KEY");
+                       
+  if (isInvalidKey) {
+    isGeminiKeyBlocked = true;
+    console.warn(`[Gemini] Clé API non active détectée dans ${endpointName}. Passage automatique en mode de secours local.`);
+  } else {
+    console.warn(`[Gemini] Problème d'appel dans ${endpointName}:`, error?.message || String(error));
+  }
+}
+
 function getGeminiClient(): GoogleGenAI {
   if (!aiClient) {
     const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
-      throw new Error("GEMINI_API_KEY non configurée. Veuillez l'ajouter dans les Secrets de l'AI Studio.");
+    if (!hasValidGeminiKey() || !apiKey) {
+      throw new Error("GEMINI_API_KEY non configurée ou invalide. Veuillez l'ajouter dans les Secrets de l'AI Studio.");
     }
     aiClient = new GoogleGenAI({
       apiKey,
@@ -292,6 +326,21 @@ app.post("/api/gemini/analyze-trades", async (req, res) => {
   const finalCurrentBalance = currentBalance !== undefined ? Number(currentBalance) : finalStartingBalance;
   const finalCurrentPnL = currentPnL !== undefined ? Number(currentPnL) : 0;
 
+  if (!hasValidGeminiKey()) {
+    const fallbackText = getAnalyzeTradesFallback({
+      trades,
+      startingBalance: finalStartingBalance,
+      currency: finalCurrency,
+      targetValue: finalTargetValue,
+      dailyDrawdown: finalDailyDrawdown,
+      totalDrawdown: finalTotalDrawdown,
+      currentBalance: finalCurrentBalance,
+      currentPnL: finalCurrentPnL
+    });
+    res.json({ analysis: fallbackText });
+    return;
+  }
+
   try {
     const ai = getGeminiClient();
     
@@ -347,7 +396,7 @@ Reste hyper professionnel, direct, extrêmement mathématique et encourageant. U
 
     res.json({ analysis: response.text });
   } catch (error: any) {
-    console.warn("Échec de l'appel Gemini dans analyze-trades (utilisation du plan de secours local):", error.message || error);
+    handleGeminiCallError("analyze-trades", error);
     const fallbackText = getAnalyzeTradesFallback({
       trades,
       startingBalance: finalStartingBalance,
@@ -364,6 +413,11 @@ Reste hyper professionnel, direct, extrêmement mathématique et encourageant. U
 
 // 2. API: Opportunities System
 app.post("/api/gemini/opportunities", async (req, res) => {
+  if (!hasValidGeminiKey()) {
+    res.json({ opportunities: getOpportunitiesFallback() });
+    return;
+  }
+
   try {
     const ai = getGeminiClient();
     
@@ -400,7 +454,7 @@ Tu dois renvoyer le résultat strictly sous format JSON respectant exactement le
     const items = JSON.parse(response.text || "[]");
     res.json({ opportunities: items });
   } catch (error: any) {
-    console.warn("Échec de l'appel Gemini dans opportunities (utilisation du plan de secours local):", error.message || error);
+    handleGeminiCallError("opportunities", error);
     res.json({ opportunities: getOpportunitiesFallback() });
   }
 });
@@ -414,6 +468,11 @@ app.post("/api/gemini/backtest", async (req, res) => {
   }
 
   const finalCapital = Number(startingCapital) || 10000;
+
+  if (!hasValidGeminiKey()) {
+    res.json(getBacktestFallback(strategyName, symbol, finalCapital));
+    return;
+  }
 
   try {
     const ai = getGeminiClient();
@@ -468,8 +527,369 @@ Renvoie STRICTEMENT un objet JSON en français respectant scrupuleusement le sch
     const backtestResult = JSON.parse(response.text || "{}");
     res.json(backtestResult);
   } catch (error: any) {
-    console.warn("Échec de l'appel Gemini dans backtest (utilisation du plan de secours local):", error.message || error);
+    handleGeminiCallError("backtest", error);
     res.json(getBacktestFallback(strategyName, symbol, finalCapital));
+  }
+});
+
+// 3b. API: Analyze News
+app.post("/api/gemini/analyze-news", async (req, res) => {
+  const { newsName, previousValue, forecastValue, actualValue, globalImpact, marketReaction } = req.body;
+
+  if (!newsName) {
+    res.status(400).json({ error: "Le nom de la news est requis pour l'analyse." });
+    return;
+  }
+
+  if (!hasValidGeminiKey()) {
+    const fallbackText = getNewsAnalysisFallback(
+      newsName,
+      previousValue || '-',
+      forecastValue || '-',
+      actualValue || '-',
+      globalImpact || 'POSITIF_USD',
+      marketReaction || '-'
+    );
+    res.json({ analysis: fallbackText });
+    return;
+  }
+
+  try {
+    const ai = getGeminiClient();
+
+    const prompt = `Tu es un Expert Analyste Macro-économique Senior spécialisé en Smart Money Concepts (SMC) et Inner Circle Trader (ICT). 
+Analyse l'événement macro-économique suivant :
+- Nom de la news : ${newsName}
+- Valeur précédente : ${previousValue || '-'}
+- Valeur prévue (Forecast) : ${forecastValue || '-'}
+- Valeur réelle (Actual) : ${actualValue || '-'}
+- Impact global actuel : ${globalImpact || 'POSITIF_USD'} (Direction induite: ${globalImpact === 'POSITIF_USD' ? 'Bullish USD / Bearish EURUSD' : 'Bearish USD / Bullish EURUSD'})
+- Réaction constatée : ${marketReaction || '-'}
+
+Génère un rapport d'analyse macro-économique extrêmement rigoureux et formel en français pour guider le trader sur prop firms. Il doit adopter une mise en page Markdown riche, moderne et aérée.
+La structure doit impérativement respecter les sections suivantes rédigées entièrement en français :
+
+### 🌐 ACCUEIL : EXPLICATION MAJEURE
+[Donne une explication extrêmement claire, didactique et professionnelle du rôle de cette publication macro-économique. Pourquoi est-elle surveillée par les banques centrales et les teneurs de marché (Market Makers) ? Explique l'écart (deviance) entre la valeur réelle, la prévision et la valeur précédente, et son incidence psychologique immédiate sur les banques.]
+
+### ⏳ HORIZON TEMPOREL & FLUIDITÉ DE LIQUIDITÉ
+[Précise clairement l'amplitude de l'impact en termes d'horizon temporel actuel et de manipulation algorithmique (IPDA) :
+- Est-ce un impact à **Court Terme** (quelques heures, idéal pour chasser la liquidité intra_session, balayage des stop-loss / BSL / SSL sur les m15/H1) ?
+- Est-ce un impact à **Moyen Terme** (durant la journée entière / clôture de la daily expansion) ?
+- Ou un impact à **Long Terme** (impulsion structurelle affectant l'Order Flow sur plusieurs semaines ou mois) ?
+Justifie techniquement avec le vocabulaire SMC/ICT.]
+
+### 🎯 SCÉNARIO DE TRADING PRÉCIS (XAU/USD & DXY)
+[Propose un guide d'intervention précis et institutionnel pour corréler le XAU/USD (Gold) et le DXY (US Dollar Index) :
+1. **Sur le DXY (Index Dollar)** : Comment lire la structure ? Est-ce qu'on cherche un comblement d'un Fair Value Gap (FVG) ou un rejet sur un Order Block (OB) de l'Inversion de tendance ?
+2. **Sur le XAU/USD (Or)** : Attendre spécifiquement l'ouverture ou la manipulation de la Killzone de New York (NY Killzone) ou London Open. Comment viser l'accumulation/manipulation/distribution (AMD) ? Attraper les rejets de liquidité (Liquidity Sweeps) sous les creux ou sommets relatifs avant de rechercher des retournements de structure (MSS / Market Structure Shift) ?
+Reste extrêmement précis sur l'utilisation du temps et du prix (Time & Price).]
+
+Rédige ce rapport en français avec un ton expert, pragmatique et structuré. Utilise des émojis pertinents pour rendre le rapport moderne, aéré et ultra-scannable.`;
+
+    const response = await ai.models.generateContent({
+      model: "gemini-3.5-flash",
+      contents: prompt,
+    });
+
+    res.json({ analysis: response.text });
+  } catch (error: any) {
+    handleGeminiCallError("analyze-news", error);
+    const fallbackText = getNewsAnalysisFallback(
+      newsName,
+      previousValue || '-',
+      forecastValue || '-',
+      actualValue || '-',
+      globalImpact || 'POSITIF_USD',
+      marketReaction || '-'
+    );
+    res.json({ analysis: fallbackText });
+  }
+});
+
+// --- Ruthless AI Coach Chat helper and endpoint ---
+function getCoachChatFallback(userMessage: string, lang: string, dailyDrawdownPercent: string, winRate: string, recentTradesList: any[] = []): string {
+  const msg = userMessage.toLowerCase();
+  const isEn = lang === "en";
+
+  // Identify any trade to roast
+  const lastTrade = Array.isArray(recentTradesList) && recentTradesList.length > 0 ? recentTradesList[0] : null;
+  const lastTradeSymbol = lastTrade ? lastTrade.symbol : "";
+  const lastTradePnl = lastTrade ? (lastTrade.pnl || 0) : 0;
+  const lastTradeSetup = lastTrade ? (lastTrade.setup || "") : "";
+  const lastTradeRep = lastTrade 
+    ? (isEn 
+        ? `Look at your recent trade on ${lastTradeSymbol} (${lastTrade.direction}) with ${lastTradePnl} USD. You entered on a setup "${lastTradeSetup || 'N/A'}" and got smashed!`
+        : `Regarde ton dernier trade sur ${lastTradeSymbol} (${lastTrade.direction}) avec un PnL de ${lastTradePnl} USD. Tu es entré sur un setup "${lastTradeSetup || 'N/A'}" et tu t'es fait couper !`)
+    : "";
+
+  // Dynamic selection key based on message length and timestamp to rotate responses
+  const rotateIdx = (userMessage.length + new Date().getSeconds()) % 4;
+
+  if (isEn) {
+    // 1. FOMO
+    if (msg.includes("fomo") || msg.includes("chase") || msg.includes("hurry") || msg.includes("fear") || msg.includes("impatience") || msg.includes("miss")) {
+      const fomoOptions = [
+        `FOMO IS THE SIGN OF A WEAK MIND. You chased the candle and now you're whining? You deserve that loss! ${lastTradeSymbol ? `Just like you chased ${lastTradeSymbol} earlier!` : ''} Until you learn to wait for liquidity sweeps (BSL/SSL) and a proper MSS, stay away from the charts!`,
+        `Are you a professional or a retail degenerate clicker? Chasing price is a ticket to bankruptcy. ${lastTradeRep} Turn off your screen and read the trading plan again.`,
+        `Oh, you thought the train was leaving without you? Excellent of you to buy the absolute high of the day. The Market Makers thank you for providing liquidity. WALK AWAY!`,
+        `IMPATIENCE is the primary source of revenue for brokers. You entered because you were bored, not because you had a setup. Do 50 pushups and rethink your life choices.`
+      ];
+      return fomoOptions[rotateIdx % fomoOptions.length];
+    }
+    // 2. REVENGE / TILT
+    if (msg.includes("revenge") || msg.includes("double") || msg.includes("tilt") || msg.includes("angry") || msg.includes("mad") || msg.includes("recover") || msg.includes("rattraper")) {
+      const revengeOptions = [
+        `REVENGE TRADING? You reduced yourself to a crying casino degenerate! You are literally donating your hard-earned capital to the market maker pools. Turn off your computer right now! Your current win rate is only ${winRate}%!`,
+        `Oh, you're angry at the market? Sure, type representatively on your keyboard, that will surely move the chart back in your favor. PATHETIC! Walk away before you blow your entire prop evaluation.`,
+        `Revenge trading on ${lastTradeSymbol || 'the market'}? You are trading on tilt and emotion. That is clinical insanity. Your statistics are terrible right now (${winRate}% win rate). STOP CLIKING!`,
+        `Every time you try to 'get it back', you double your risk and cut your brain in half. Close the app. This is not a game. I am here to build a mercenary, not a whiner.`
+      ];
+      return revengeOptions[rotateIdx % revengeOptions.length];
+    }
+    // 3. LOSS
+    if (msg.includes("lost") || msg.includes("lose") || msg.includes("negative") || msg.includes("drawdown") || msg.includes("loss") || msg.includes("perte")) {
+      const lossOptions = [
+        `YOU ARE IN DRAWDOWN (${dailyDrawdownPercent}% today). SO WHAT? Loss is a structural statistic, not a personal tragedy. Did you follow the setup? If yes, move on. If no, you committed a crime against your account. ${lastTradeRep}`,
+        `A loss is the direct price of business. Whining about it shows you're psychologically unfit to manage real institutional capital. Tighten your stop losses and reduce risk to 0.25%.`,
+        `Your drawdown of ${dailyDrawdownPercent}% today is exactly within normal system variance IF you followed the rules. But looking at your trade history, you entered like an amateur. Control your risk!`,
+        `Losses happen. Even my best algorithms experience drawdown. The difference is they don't cry and change setups mid-session. Execute with cold precision or leave.`
+      ];
+      return lossOptions[rotateIdx % lossOptions.length];
+    }
+    // 4. WIN
+    if (msg.includes("win") || msg.includes("won") || msg.includes("gagn") || msg.includes("profit") || msg.includes("success")) {
+      const winOptions = [
+        `A WIN? DO NOT GET COCKY! Overconfidence is the silent serial killer. Was it a real high-probability trade? If not, you are just a lucky idiot, and lucky idiots blow their account on the next trade!`,
+        `Congratulations on clicking a button and seeing green numbers. Now stay humble. Arrogance starts the decay. Keep your risk strictly at 1% max and protect the capital.`,
+        `Good execution on ${lastTradeSymbol ? lastTradeSymbol : "the setup"}. But remember: tomorrow is a clean slate. One win doesn't make you a market god. Analyze what worked and enforce it.`,
+        `Profit secured. Do not celebrate too early. The market is an expert at giving you a tiny treat before pulling down the guillotine. What are you doing with your risk next?`
+      ];
+      return winOptions[rotateIdx % winOptions.length];
+    }
+    // 5. TECHNICAL QUESTIONS
+    if (msg.includes("how") || msg.includes("setup") || msg.includes("fvg") || msg.includes("block") || msg.includes("learn") || msg.includes("help") || msg.includes("explain") || msg.includes("comment") || msg.includes("concept")) {
+      const questionOptions = [
+        `A technical inquiry? Listen closely: You look for market structure shifts (MSS) with displacement on M5/M15, identifying the premier Fair Value Gap (FVG) or optimal order block (OB). But tell me, do you actually wait for the price to hit premium/discount levels or do you rush in like a novice?`,
+        `Smart Money Concepts (SMC) require clinical execution. You map your swing highs/lows on H1/H4, find liquidity pools (BSL/SSL), and wait for NY/London Killzones. Do you actually wait for structural sweeps or do you trade the Asian range like a headless retail chicken?`,
+        `Order blocks are useless if you don't look at higher-timeframe order flow. Let me ask you: how do you validate your entries? If it's not backed by a real session sweep, it's just retail noise. Explain your confirmation protocol or go back to demo!`,
+        `To survive here, you must master liquidity. Price travels from internal range liquidity to external range liquidity. Explain to me what an Optimal Trade Entry (OTE) is, or go flip burgers instead!`
+      ];
+      return questionOptions[rotateIdx % questionOptions.length];
+    }
+    // 6. GENERAL
+    const generalOptions = [
+      `DISCIPLINE IS NOT OPTIONAL! The Market Makers (IPDA) are waiting for your next impatient, bored click to sweep your stops. Today your drawdown is ${dailyDrawdownPercent}%. Are you ready to execute strictly or have you given up?`,
+      `Stop talking and show me clean, rule-based execution. ${lastTradeRep} What is your precise risk allocation for the next trade? Answer me!`,
+      `I don't care about your feelings, I care about your drawdown and your win rate (${winRate}%). Every trade in excess of your plan is a betrayal of your vision. Stay focused!`,
+      `Rentability isn't about magical indicators; it's about cold, boring military discipline. Are you going to wait for your setup in the next institutional Killzone, or continue acting like an amateur gambler?`
+    ];
+    return generalOptions[rotateIdx % generalOptions.length];
+  } else {
+    // FRENCH
+    // 1. FOMO
+    if (msg.includes("fomo") || msg.includes("impatience") || msg.includes("peur") || msg.includes("rater") || msg.includes("rapide")) {
+      const fomoOptions = [
+        `LE FOMO EST LA SIGNATURE D'UN ESPRIT FAIBLE ET SANS COLONNE ! Tu as couru après la bougie comme un affamé et maintenant tu viens pleurer ? Tu as mérité cette claque ! ${lastTradeSymbol ? `Comme sur ton trade sur ${lastTradeSymbol} où tu as paniqué !` : ''} Tant que tu n'attendras pas une vraie prise de liquidité (BSL/SSL) en Killzone, interdiction de toucher aux graphiques !`,
+        `Tu te prends pour un trader de haut niveau ou un joueur de loto compulsif ? Courir après le prix est le meilleur moyen de cramer ton évaluation. ${lastTradeRep} Ferme ton terminal et relis ton putain de plan.`,
+        `Ah, tu avais peur que le train parte sans toi ? Félicitations pour avoir acheté le plus haut historique du jour ! Le teneur de marché IPDA te remercie pour ta contribution charitable. VA T'AÉRER LE CERVEAU !`,
+        `L'IMPATIENCE est le fond de commerce des brokers. Tu es entré parce que tu t'ennuyais, pas parce que tu avais un setup A+. Fais 50 pompes immédiatement et demande-toi si tu es sérieux ou si tu joues à la console.`
+      ];
+      return fomoOptions[rotateIdx % fomoOptions.length];
+    }
+    // 2. REVENGE / TILT
+    if (msg.includes("revenge") || msg.includes("double") || msg.includes("tilt") || msg.includes("colère") || msg.includes("énerve") || msg.includes("refaire") || msg.includes("rattraper")) {
+      const revengeOptions = [
+        `DU REVENGE TRADING ? TU T'ES ABAISSÉ AU RANG DE JOUEUR DE CASINO SANS FIERTÉ ! Tu es en train d'offrir ton capital durement gagné aux liquidity pools sur un plateau d'argent. Éteins cette machine tout de suite ! Ton taux de réussite est à un niveau misérable de ${winRate}% !`,
+        `Oh, monsieur est fâché contre les graphiques ? Vas-y, tape bien fort sur ton clavier, ça va sûrement faire remonter la bougie en ta faveur. MINABLE ! Éloigne-toi des écrans avant de cramer définitivement ton compte.`,
+        `Du revenge trading sur ${lastTradeSymbol || 'les marchés'} ? Tu trades sous le coup de l'émotion pure et dure. C'est de la folie clinique ! Tes statistiques sont désastreuses (${winRate}% de win rate). ARRÊTE DE CLIQUER !`,
+        `Chaque fois que tu essaies de "te refaire", tu doubles ton risque et divises ton QI par deux. Ferme cette plateforme de trading. Je suis là pour former un soldat de la finance, pas un pleurnicheur de forum.`
+      ];
+      return revengeOptions[rotateIdx % revengeOptions.length];
+    }
+    // 3. LOSS
+    if (msg.includes("perdu") || msg.includes("perte") || msg.includes("drawdown") || msg.includes("rouge") || msg.includes("moins") || msg.includes("perte")) {
+      const lossOptions = [
+        `TU AS ESSUYÉ UNE PERTE ? ET ALORS ?! Ton drawdown quotidien est de ${dailyDrawdownPercent}%. La perte est une donnée géométrique et statistique normale du business. La seule question qui compte : AS-TU RESPECTÉ LE PLAN ? Si oui, c'est ton coût de fonctionnement. Si non, tu es un hors-la-loi. ${lastTradeRep}`,
+        `Une perte est le coût normal de faire du business. Chouiner à ce sujet prouve que tu n'es pas encore prêt pour gérer les capitaux d'une prop firm. Réduis ton risque à 0.25% sur ton prochain trade et surveille ton stop loss.`,
+        `Ton drawdown de ${dailyDrawdownPercent}% aujourd'hui est parfaitement tolérable pour nos modèles SI tu as respecté les règles. Mais au vu de tes derniers trades, tu as fait preuve d'amateurisme. Reprends-toi !`,
+        `Les pertes font partie du jeu. Mes meilleurs algorithmes encaissent des drawdowns. La différence, c'est qu'ils ne paniquent pas et ne changent pas de setup au milieu de la session. Exécute comme un robot ou reste sur simulateur !`
+      ];
+      return lossOptions[rotateIdx % lossOptions.length];
+    }
+    // 4. WIN
+    if (msg.includes("gagné") || msg.includes("gain") || msg.includes("profit") || msg.includes("réussi") || msg.includes("valide") || msg.includes("win")) {
+      const winOptions = [
+        `UN GAIN ? NE SOURIS PAS TROP VITE ! L'excès de confiance est le baiser de la mort. Était-ce un setup A+ validé sur un FVG clair en Killzone ? Si non : tu n'as été qu'un imbécile chanceux, et les imbéciles chanceux finissent toujours ruinés !`,
+        `Félicitations pour avoir appuyé sur un bouton et vu du vert. Reste humble. L'arrogance est le début du déclin. Garde ton risque sous contrôle strict à 1% maximum et protège tes gains !`,
+        `Belle exécution technique sur ${lastTradeSymbol ? lastTradeSymbol : "le marché"}. Cependant, retiens bien ceci : demain, ton compteur repart à zéro. Un gain ne fait pas de toi un génie. Analyse ce qui a fonctionné et verrouille ta discipline.`,
+        `Profit encaissé. Ne te réjouis pas trop vite. Le marché adore te donner un biscuit avant d'actionner la guillotine. Quel est ton plan de gestion de risque pour tes prochains trades ?`
+      ];
+      return winOptions[rotateIdx % winOptions.length];
+    }
+    // 5. TECHNICAL QUESTIONS
+    if (msg.includes("comment") || msg.includes("setup") || msg.includes("fvg") || msg.includes("block") || msg.includes("apprendre") || msg.includes("aide") || msg.includes("explique") || msg.includes("ordre") || msg.includes("concept")) {
+      const questionOptions = [
+        `Tu veux de la technique ? Écoute attentivement : tu dois cartographier tes structures H1/H4, chasser la liquidité externe (BSL/SSL), attendre un bris de structure (MSS) en M5 avec déplacement, puis entrer sur le FVG optimal. Mais dis-moi : as-tu la patience d'attendre ces niveaux premium ou discounts, ou es-tu un amateur impulsif ?`,
+        `Les Smart Money Concepts (SMC) exigent une rigueur chirurgicale. On ne trade pas pour passer le temps ! Tu identifies les blocs de contrats (Order Blocks) de haute probabilité créés par les institutions lors des Killzones de Londres ou NY. Est-ce que tu as déjà formalisé ce protocole de confirmation ou tu t'en remets au hasard ?`,
+        `Un bloc d'ordres ne vaut rien si le flux d'ordres supérieur (Order Flow) est contre toi. Comment valides-tu tes setups ? Si ça ne repose pas sur une prise de liquidité d'une session précédente, c'est du bruit de marché. Quel est ton protocole de confirmation exact ? Réponds ou retourne sur démo !`,
+        `Pour survivre ici, tu dois maîtriser la liquidité interbancaire. Le prix se déplace uniquement d'un déséquilibre à une zone de liquidité. Explique-moi ce qu'est une Optimal Trade Entry (OTE) avec Fibonacci, ou va plutôt travailler dans la restauration rapide !`
+      ];
+      return questionOptions[rotateIdx % questionOptions.length];
+    }
+    // 6. GENERAL / CHAT GREETINGS
+    const generalOptions = [
+      `LA DISCIPLINE SANS COMPROMIS EST LA SEULE VOIE VERS LE PAYOUT. Les algorithmes d'arbitrage (IPDA) n'attendent que ton prochain clic impulsif pour raser tes stops. Actuellement, ton drawdown du jour est de ${dailyDrawdownPercent}%. Es-tu prêt à obéir à tes règles ou es-tu déjà vaincu ?`,
+      `Assez parlé. Montre-moi une exécution froide, robotique et sans âme. ${lastTradeRep} Quel est ton levier et ton plan de risque de survie exact pour les prochaines 24h ?`,
+      `Je me contrefiche de tes états d'âme. Ce qui m'importe, c'est ton drawdown et ton taux de réussite (${winRate}%). Chaque trade hors plan est une trahison psychiatrique. Mets tes émotions de côté et concentre-toi !`,
+      `La rentabilité ne dépend pas d'indicateurs miracles, mais d'une rigueur militaire. Vas-tu attendre calmement l'ouverture de la prochaine Killzone ou vas-tu continuer à cliquer comme un joueur de casino malade ?`
+    ];
+    return generalOptions[rotateIdx % generalOptions.length];
+  }
+}
+
+app.post("/api/gemini/coach-chat", async (req, res) => {
+  const { messages, trades, startingBalance, currency, activeAccount, language } = req.body;
+
+  const finalStartingBalance = Number(startingBalance) || 100000;
+  const finalCurrency = currency || "USD";
+  const finalLang = language || "fr";
+
+  const totalTrades = Array.isArray(trades) ? trades.length : 0;
+  const closedTrades = Array.isArray(trades) ? trades.filter((t: any) => t.status === "CLOSED") : [];
+  const winningTrades = closedTrades.filter((t: any) => (t.pnl || 0) > 0).length;
+  const winRate = closedTrades.length > 0 ? ((winningTrades / closedTrades.length) * 100).toFixed(1) : "0.0";
+  const currentPnL = closedTrades.reduce((sum: number, t: any) => sum + (t.pnl || 0), 0);
+  const currentBalance = finalStartingBalance + currentPnL;
+
+  const dailyDrawdownAmount = currentPnL < 0 ? Math.abs(currentPnL) : 0;
+  const dailyDrawdownPercent = finalStartingBalance > 0 ? ((dailyDrawdownAmount / finalStartingBalance) * 100).toFixed(2) : "0.0";
+
+  const activeAccountName = activeAccount?.name || "Compte Standard";
+  const activeAccountFirm = activeAccount?.firmOrBrokerName || "PropFirm";
+
+  const sortedClosedTrades = [...closedTrades].sort((a: any, b: any) => {
+    const timeA = new Date(a.closedAt || a.createdAt || 0).getTime();
+    const timeB = new Date(b.closedAt || b.createdAt || 0).getTime();
+    return timeB - timeA;
+  });
+  const recentTradesList = sortedClosedTrades.slice(0, 5);
+  const recentTradesSummary = recentTradesList.length > 0
+    ? recentTradesList.map((t: any, i: number) => {
+        return `- Trade #${i+1}: ${t.symbol} ${t.direction} | PnL = ${t.pnl || 0} ${finalCurrency} | Entrée: ${t.entryPrice || 'N/A'} | SL: ${t.stopLoss || 'N/A'} | TP: ${t.takeProfit || 'N/A'} | Sortie: ${t.exitPrice || 'N/A'} | Setup: ${t.setup || 'N/A'} | Tags: ${[...(t.mistakeTags || []), ...(t.psychologyTags || [])].join(', ') || 'Aucun'} | Notes: ${t.notes || 'Aucune'}`;
+      }).join("\n")
+    : "Aucun trade clôturé récemment dans le journal.";
+
+  // Safe recovery mechanism if no key or Gemini error
+  if (!hasValidGeminiKey()) {
+    const lastUserMsg = Array.isArray(messages) && messages.length > 0 ? messages[messages.length - 1]?.text || "" : "";
+    const fallbackText = getCoachChatFallback(lastUserMsg, finalLang, dailyDrawdownPercent, winRate, recentTradesList);
+    res.json({ reply: fallbackText });
+    return;
+  }
+
+  // Map and normalize messages to Gemini alternating role format (user -> model -> user -> model)
+  const rawMapped = (messages || []).map((msg: any) => ({
+    role: msg.sender === 'user' ? 'user' : 'model',
+    parts: [{ text: msg.text || "" }]
+  }));
+
+  // Collapse consecutive messages of the same role to conform to standard WebRTC/Gemini protocols
+  const mappedContents: any[] = [];
+  for (const m of rawMapped) {
+    if (mappedContents.length === 0) {
+      mappedContents.push(m);
+    } else {
+      const last = mappedContents[mappedContents.length - 1];
+      if (last.role === m.role) {
+        last.parts[0].text += "\n" + m.parts[0].text;
+      } else {
+        mappedContents.push(m);
+      }
+    }
+  }
+
+  // Ensure history has correct turn-taking (always starts with user)
+  if (mappedContents.length === 0) {
+    mappedContents.push({ role: 'user', parts: [{ text: "Bonjour." }] });
+  } else if (mappedContents[0].role !== 'user') {
+    mappedContents.unshift({ role: 'user', parts: [{ text: "Bonjour." }] });
+  }
+
+  let systemInstruction = "";
+
+  if (finalLang === "en") {
+    systemInstruction = `You are the Elite Coach / Savage Drill Sergeant of PropFlow, specializing in institutional trading (SMC/ICT concepts: Smart Money Concepts & Inner Circle Trader).
+Your supreme and only goal is to make this trader profitable by destroying their ego, instilling absolute iron discipline, and forcing them to strictly protect their capital.
+
+★★★★ CRITICAL / NO REPETITION RULE ★★★★
+You are STRICTLY FORBIDDEN from repeating the same sentence structures, opening greetings, or coaching clichés over and over. Avoid reciting predictable boilerplate scold phrases in a loop.
+Analyze precisely what the user just said in their message, evaluate its technical legitimacy and logic. Give a highly tech-savvy, direct, precise and mathematical response using actual SMC/ICT concepts, and then apply your demanding, severe professor tone. Vary your phrases and vocabulary for a real live human co-pilot simulation.
+
+Here is the REAL-TIME data of their trading account:
+- Current Capital Balance: ${currentBalance} ${finalCurrency} (Account Name: "${activeAccountName}" via "${activeAccountFirm}")
+- Today's Drawdown Consumption: ${dailyDrawdownPercent}% of starting balance (${finalStartingBalance} ${finalCurrency})
+- Win Rate: ${winRate}% (on ${closedTrades.length} closed trades)
+- Cumulative PnL: ${currentPnL} ${finalCurrency}
+- The 5 most recently closed trades (analyze these for recurring errors or patterns of loss):
+${recentTradesSummary}
+
+Absolute behavior guidelines:
+1. SAVAGE & COLD TONE: Highly demanding, cynical, direct, and completely unfiltered. Use all caps (SHOUTING) if they complain, exhibit FOMO/revenge trading, make excuses, or try to bend risk rules. Do NOT use artificial AI helper templates (never write "As an AI...", "I am happy to...", get straight into the mud). Remember: 95% of traders fail due to psychological weakness. Remind them of this constantly.
+2. RECURRING ERRORS & PAST TRADES CITATIONS: You must analyze the list of their recent trades to identify patterns of failure (e.g. repeated losses on EURUSD, trading a Fair Value Gap setup without confirmations, forgetting to set stop losses, or running bad risk-reward ratios). You must explicitly cite specific examples of their past trades from the provided list to back up your critiques (e.g., "You keep talking about H1 FVG, but you just lost 3 times of capital on GBPUSD because you entered without waiting for NY session confirmation. Do you expect me to accept this trash performance?"). Vary your phrasing, avoid repeating the exact same canned lines, and dynamically match the user's current dialog state.
+3. OPERATIONAL STANDARDS (SMC/ICT): Their entire trading survival depends on high-probability liquidity sweeps (BSL/SSL), trading only during institutional sessions (London/NY Killzones), observing Market Structure Shifts (MSS/BOS), and executing strictly on Fair Value Gaps (FVG) or high quality Order Blocks in discount/premium areas. Any trade outside this protocol is a crime against capital.
+4. LIVE DIALOGUE ADAPTATION & TECHNICAL QUESTIONS:
+- If they ask a technical trading question: Explain with precise professional SMC/ICT terms, but ALWAYS conclude with a provocative question or a direct challenge to force them to analyze their own flaws (e.g., "Explain to me how you specify order blocks in discount versus premium territory, or are you just guessing like an retail amateur?").
+- If they complain about a loss: Roasted them. Remind them that losing while following the plan is normal, but whining is for losers.
+- If they brag about a lucky trade outside the plan: DO NOT congratulate them. Call them a "lucky fool" or "lucky idiot" and warn them that this bad habit will blow their account next time.
+- If they followed the plan perfectly on a loss: Encourage them. Tell them that taking structured losses is professional.
+- If they won inside the plan: Validate their execution, but tell them to stay humble because overconfidence is the invisible killer.
+5. RESPONSE FORMAT: Direct, impact-driven, punchy responses. Maximum size 150-250 words. Do not write boring essays, keep it razor-sharp.`;
+  } else {
+    systemInstruction = `Tu es le Coach d'Élite / Sergent-Chef Impitoyable de PropFlow, spécialisé dans la discipline militaire du trading institutionnel (concepts SMC et ICT - Smart Money Concepts et Inner Circle Trader).
+Ton but unique et suprême est de rendre ce trader rentable en détruisant son ego, en lui instillant une discipline de fer et en le forçant à respecter scrupuleusement son plan et sa gestion des risques.
+
+★★★★ CRÈGLES DE SURVIE / INTERDICTION STRICTE DE RÉPÉTITIONS ★★★★
+Il t'est STRICTEMENT INTERDIT de répéter en boucle les mêmes structures de phrases, tournures d'introductions ("soldat ! / recrue ! / dans l'arène graphique") ou reproches tout au long du dialogue. Éloigne-toi absolument du comportement d'un chatbot classique qui réutilise sans cesse les mêmes leçons prémâchées.
+Analyse précisément et intelligemment ce que l'utilisateur vient d'écrire ou de soumettre. Réponds-y de manière claire, technique et logique en utilisant toute l'étendue de l'arsenal SMC/ICT (IPDA, FVG, MSS, BOS, Killzones, OTE, sweeps, discount/premium ranges), puis applique ton ton sévère et cynique de professeur exigeant sans paraphraser ou radoter tes réponses antérieures.
+
+Voici les informations réelles et actualisées de son compte de trading :
+- Licence de capital actuelle : ${currentBalance} ${finalCurrency} (Compte: "${activeAccountName}" chez "${activeAccountFirm}")
+- Drawdown actuel consommé : ${dailyDrawdownPercent}% du capital initial de ${finalStartingBalance} ${finalCurrency}
+- Taux de réussite (Win Rate) : ${winRate}% (sur ${closedTrades.length} trades clôturés)
+- Somme totale du PnL cumulé : ${currentPnL} ${finalCurrency}
+- Les 5 derniers trades clôturés récemment (à analyser pour des erreurs récurrentes ou patterns de pertes) :
+${recentTradesSummary}
+
+Voici tes règles de comportement absolues :
+1. TON ET SÉVÉRITÉ : Tu es extrêmement exigeant, direct, cynique et impitoyable. Tu cries (en MAJUSCULES) s'il se plaint, s'il fait preuve de FOMO ou de revenge trading, s'il cherche des excuses ou s'il essaie de négocier les règles de risque. Tu n'utilises aucun mot inutile de politesse artificielle (ne dis jamais "En tant qu'IA...", "Je suis ravi de t'aider...", sois directement dans l'arène graphique). Rappelle-lui que 95% des traders échouent à cause de l'indiscipline et qu'il se comporte comme un amateur si son journal est brouillon.
+2. ANALYSE DES ERREURS RÉCURRENTES & CITATION DES TRADES PASSÉS : Tu dois impérativement analyser la liste de ses derniers trades pour y chercher des schémas d'échecs (ex: pertes répétées sur EURUSD, utilisation d'un setup de Fair Value Gap sans confirmation, oubli récurrent du stop loss, mauvais ratio gain/perte). Tu dois citer des exemples précis de ses trades passés pour illustrer tes critiques et tes furies (ex: "Tu parles encore de FVG H1, mais récemment sur ton Trade #1 sur GBPUSD, tu t'es fait sortir à cause d'un stop serré ridicule sans structure. Tu ne comprends vraiment rien ?"). Ne te répète pas dans tes phrases d'une réponse à l'autre. Varie tes tournures et adapte-toi précisément au flux immédiat de la discussion.
+3. RIGUEUR OPÉRATIONNELLE (SMC/ICT) : Tout son succès repose sur la rigueur opérationnelle : chasser exclusivement la liquidité et les arrêts (Liquidity Sweeps / BSL / SSL), attendre précisément l'ouverture et les distributions des Killzones (Londres/New York), observer le bris de structure (MSS/BOS) et exécuter uniquement sur les FVG (Fair Value Gaps) ou les blocs de contrats (Order Blocks) de haute probabilité. Tout trade en dehors de ces paramètres est qualifié de CRIME.
+4. ADAPTATION EN DIRECT & QUESTIONS TECHNIQUES :
+- S'il pose une question de trading : Réponds de manière technique et structurée avec la précision SMC/ICT interbancaire, mais conclus TOUJOURS ta réponse par une question provocante ou un défi cinglant pour le pousser à réfléchir par lui-même et à s'améliorer (ex: "Quel est l'impact d'un OTE en Premium si tu n'as pas liquidé l'Asian High avant ? Réponds ou retourne sur simulateur !").
+- S'il se plaint d'une perte : Recadre-le. Perdre de l'argent en respectant le plan est normal, mais chouiner est indigne d'un pro.
+- S'il se vante d'un gain chanceux hors plan : Ne le félicite surtout PAS. Dis-lui que c'est un "imbécile chanceux" et qu'il finira ruiné.
+- S'il a fait un trade gagnant dans le plan : Valide la technique mais garde-le sous tension. L'excès de confiance est mortel.
+5. FORMAT DE RÉPONSE : Des réponses percutantes, directes, courtes. Maximum 150-250 mots. Pas de dissertation inutile, sois tranchant et percutant comme un couperet.`;
+  }
+
+  try {
+    const ai = getGeminiClient();
+    const response = await ai.models.generateContent({
+      model: "gemini-3.5-flash",
+      contents: mappedContents,
+      config: {
+        systemInstruction,
+        temperature: 1.0,
+      }
+    });
+
+    res.json({ reply: response.text || "La discipline n'a pas pu être formulée." });
+  } catch (error: any) {
+    handleGeminiCallError("coach-chat", error);
+    const lastUserMsg = Array.isArray(messages) && messages.length > 0 ? messages[messages.length - 1]?.text || "" : "";
+    const fallbackText = getCoachChatFallback(lastUserMsg, finalLang, dailyDrawdownPercent, winRate, recentTradesList);
+    res.json({ reply: fallbackText });
   }
 });
 
@@ -682,6 +1102,43 @@ app.post("/api/nowpayments/webhook", async (req, res) => {
     res.status(500).json({ error: error.message || "Une erreur interne est survenue lors du traitement du Webhook." });
   }
 });
+
+// Fallback helper for macro-economic analyze-news endpoint 
+function getNewsAnalysisFallback(newsName: string, previousValue: string, forecastValue: string, actualValue: string, globalImpact: string, marketReaction: string): string {
+  const isPositiveUSD = globalImpact === 'POSITIF_USD';
+  return `### 🌐 ACCUEIL : EXPLICATION MAJEURE
+
+L'annonce macro-économique **${newsName}** fait l'objet d'une attention rigoureuse de la part des teneurs de marché (*Market Makers*) et des institutions financières mondiales. 
+Dans la configuration actuelle :
+- **Valeur Précédente :** \`${previousValue}\`
+- **Valeur Prévue (Forecast) :** \`${forecastValue}\`
+- **Valeur Réelle Constatée (Actual) :** \`**${actualValue}**\`
+
+L'écart constaté révèle un consensus ${isPositiveUSD ? 'favorable' : 'défavorable'} pour l'économie américaine. L'impact global est catégorisé comme **${isPositiveUSD ? 'BULLISH USD' : 'BEARISH USD'}**, entraînant une réévaluation immédiate de la valeur du dollar sur l'échelle de l'algorithme IPDA. L'injection soudaine de volume vise à combler les déséquilibres bidirectionnels créés dans les carnets d'ordres institutionnels.
+
+---
+
+### ⏳ HORIZON TEMPOREL & FLUIDITÉ DE LIQUIDITÉ
+
+Cette annonce produit un impact de **Moyen Terme** à **Long Terme** :
+1. **Court Terme (0 à 4 heures) :** Haute volatilité immédiate. Balayage systématique de la liquidité présente au-dessus des sommets de session (*Buy-side Liquidity*) ou en dessous des creux (*Sell-side Liquidity*) sur les graphiques intraday (m1, m5, m15). C'est le terrain de chasse idéal des algorithmes haute fréquence.
+2. **Moyen Terme (La journée) :** Clôture de la bougie journalière (Daily Candle expansion). L'action des prix va généralement s'orienter dans la direction du déséquilibre macro-économique majeur si l'écart est prononcé.
+3. **Long Terme (Semaines à mois) :** Redéfinition de l'Order Flow institutionnel global. Les banques centrales ajusteront leurs allocations dans ces zones d'inefficacité majeures à la suite de la publication.
+
+---
+
+### 🎯 SCÉNARIO DE TRADING PRÉCIS (XAU/USD & DXY)
+
+Voici le guide tactique pour aborder cet événement selon les principes de la Smart Money (SMC) et d'ICT :
+
+1. **Sur le DXY (Index Dollar)** :
+   - En cas d'impact **BULLISH USD** (${isPositiveUSD ? 'Confirmé ici' : 'Alternatif'}): Attendez le retracement du DXY vers un **Fair Value Gap (FVG)** de niveau H1 ou un **Order Block (OB)** haussier créé durant l'impulsion de la news. Cherchez l'alignement des prix pour soutenir l'expansion haussière vers le prochain niveau de liquidité majeure (*Premium Liquidity*).
+   - En cas d'impact **BEARISH USD**: L'Index Dollar subira une purge de liquidité. Recherchez un bris de structure baissier (*MSS*) après un balayage de stop-loss haussier d'Asie ou de Londres.
+
+2. **Sur le XAU/USD (Or / Or)** :
+   - L'or évolue en corrélation inverse étroite avec le DXY. Durant la **Killzone de New York (13:00 - 16:00 UTC)**, surveillez le comportement du prix lors du contact avec un niveau clé de support/résistance journalier ou hebdomadaire.
+   - **Tactique SMC :** Ne prenez aucune position durant les 15 premières minutes de volatilité irrationnelle. Laissez les teneurs de marché chasser les stops des détaillants (*Judas Swing*). Attendez un balayage net de liquidité (*Liquidity Sweep*), suivi d'un transfert de structure sur m1 ou m5 avec création d'un **Displacement** haussier ou baissier laissant un FVG béant. Entrez sur le test du FVG (retracement à 50% de la patte d'impulsion, niveau Premium/Discount optimal d'OTE) avec un stop placé sous le creux/sommet de manipulation. Visez la liquidité opposée de session.`;
+}
 
 // 6. Integrate Server with Vite or static production bundles
 async function bootstrap() {

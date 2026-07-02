@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Globe, PlusCircle, Trash2, Calendar, TrendingUp, TrendingDown, 
-  ArrowUp, ArrowDown, Clock, Search, Filter, AlertTriangle, Zap, Sparkles
+  ArrowUp, ArrowDown, Clock, Search, Filter, AlertTriangle, Zap, Sparkles,
+  BrainCircuit, Loader2, X, Clipboard, ClipboardCheck, BookOpen, Terminal
 } from 'lucide-react';
 import { EconomicNews } from '../types';
 import { auth, db } from '../firebase-setup';
@@ -72,6 +73,14 @@ export default function EconomicNewsAnalysis({ language = 'fr' }: EconomicNewsPr
   // States for custom non-blocking confirmation overlays
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [showConfirmClearAll, setShowConfirmClearAll] = useState(false);
+
+  // States for AI Expert Analysis
+  const [selectedNewsAnalysis, setSelectedNewsAnalysis] = useState<string | null>(null);
+  const [selectedAnalysisTitle, setSelectedAnalysisTitle] = useState<string>('');
+  const [loadingAnalysisId, setLoadingAnalysisId] = useState<string | null>(null);
+  const [analyzingError, setAnalyzingError] = useState<string | null>(null);
+  const [showAnalysisModal, setShowAnalysisModal] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   // Sync auth state
   useEffect(() => {
@@ -302,6 +311,110 @@ export default function EconomicNewsAnalysis({ language = 'fr' }: EconomicNewsPr
       return matchesSearch && matchesImpact;
     });
   }, [newsList, search, impactFilter]);
+
+  const getLocalNewsAnalysisFallback = (news: EconomicNews) => {
+    const isPositiveUSD = news.globalImpact === 'POSITIF_USD';
+    return `### 🌐 ACCUEIL : EXPLICATION MAJEURE
+
+L'annonce macro-économique **${news.name}** fait l'objet d'une attention rigoureuse de la part des teneurs de marché (*Market Makers*) et des institutions financières mondiales. 
+Dans la configuration actuelle :
+- **Valeur Précédente :** \`${news.previousValue}\`
+- **Valeur Prévue (Forecast) :** \`${news.forecastValue}\`
+- **Valeur Réelle Constatée (Actual) :** \`**${news.actualValue}**\`
+
+L'écart constaté révèle un consensus ${isPositiveUSD ? 'favorable' : 'défavorable'} pour l'économie américaine. L'impact global est catégorisé comme **${isPositiveUSD ? 'BULLISH USD' : 'BEARISH USD'}**, entraînant une réévaluation immédiate de la valeur du dollar sur l'échelle de l'algorithme IPDA. L'injection soudaine de volume vise à combler les déséquilibres bidirectionnels créés dans les carnets d'ordres institutionnels.
+
+---
+
+### ⏳ HORIZON TEMPOREL & FLUIDITÉ DE LIQUIDITÉ
+
+Cette annonce produit un impact de **Moyen Terme** à **Long Terme** :
+1. **Court Terme (0 à 4 heures) :** Haute volatilité immédiate. Balayage systématique de la liquidité présente au-dessus des sommets de session (*Buy-side Liquidity*) ou en dessous des creux (*Sell-side Liquidity*) sur les graphiques intraday (m1, m5, m15). C'est le terrain de chasse idéal des algorithmes haute fréquence.
+2. **Moyen Terme (La journée) :** Clôture de la bougie journalière (Daily Candle expansion). L'action des prix va généralement s'orienter dans la direction du déséquilibre macro-économique majeur si l'écart est prononcé.
+3. **Long Terme (Semaines à mois) :** Redéfinition de l'Order Flow institutionnel global. Les banques centrales ajusteront leurs allocations dans ces zones d'inefficacité majeures à la suite de la publication.
+
+---
+
+### 🎯 SCÉNARIO DE TRADING PRÉCIS (XAU/USD & DXY)
+
+Voici le guide tactique pour aborder cet événement selon les principes de la Smart Money (SMC) et d'ICT :
+
+1. **Sur le DXY (Index Dollar)** :
+   - En cas d'impact **BULLISH USD** (${isPositiveUSD ? 'Confirmé ici' : 'Alternatif'}): Attendez le retracement du DXY vers un **Fair Value Gap (FVG)** de niveau H1 ou un **Order Block (OB)** haussier créé durant l'impulsion de la news. Cherchez l'alignement des prix pour soutenir l'expansion haussière vers le prochain niveau de liquidité majeure (*Premium Liquidity*).
+   - En cas d'impact **BEARISH USD**: L'Index Dollar subira une purge de liquidité. Recherchez un bris de structure baissier (*MSS*) après un balayage de stop-loss haussier d'Asie ou de l'ouverture de Londres.
+
+2. **Sur le XAU/USD (Or / Gold)** :
+   - L'or évolue en corrélation inverse étroite avec le DXY. Durant la **Killzone de New York (13:00 - 16:00 UTC)**, surveillez le comportement du prix lors du contact avec un niveau clé de support/résistance journalier ou hebdomadaire.
+   - **Tactique SMC :** Ne prenez aucune position durant les 15 premières minutes de volatilité irrationnelle. Laissez les teneurs de marché chasser les stops des détaillants (*Judas Swing*). Attendez un balayage net de liquidité (*Liquidity Sweep*), suivi d'un transfert de structure sur m1 ou m5 avec création d'un **Displacement** haussier ou baissier laissant un FVG béant. Entrez sur le test du FVG (retracement à 50% de la patte d'impulsion, niveau Premium/Discount optimal d'OTE) avec un stop placé sous le creux/sommet de manipulation. Visez la liquidité opposée de session.`;
+  };
+
+  const handleRequestExpertAnalysis = async (news: EconomicNews) => {
+    setLoadingAnalysisId(news.id);
+    setAnalyzingError(null);
+    setSelectedAnalysisTitle(news.name);
+
+    try {
+      const response = await fetch('/api/gemini/analyze-news', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          newsName: news.name,
+          previousValue: news.previousValue,
+          forecastValue: news.forecastValue,
+          actualValue: news.actualValue,
+          globalImpact: news.globalImpact,
+          marketReaction: news.marketReaction,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Erreur serveur (${response.status})`);
+      }
+
+      const data = await response.json();
+      if (data.analysis) {
+        setSelectedNewsAnalysis(data.analysis);
+        setShowAnalysisModal(true);
+      } else {
+        throw new Error("L'analyse n'a pas pu être générée.");
+      }
+    } catch (err: any) {
+      console.error('Expert Analysis Error:', err);
+      setAnalyzingError(err.message || 'Échec de connexion au service expert.');
+      // Show local fallback analysis immediately on query error to ensure excellent UX
+      const fallback = getLocalNewsAnalysisFallback(news);
+      setSelectedNewsAnalysis(fallback);
+      setShowAnalysisModal(true);
+    } finally {
+      setLoadingAnalysisId(null);
+    }
+  };
+
+  const handleCopyAnalysis = () => {
+    if (selectedNewsAnalysis) {
+      navigator.clipboard.writeText(selectedNewsAnalysis);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
+  const formatInlineMarkdown = (text: string) => {
+    const parts = text.split(/(\*\*.*?\*\*)/g);
+    return parts.map((part, i) => {
+      if (part.startsWith('**') && part.endsWith('**')) {
+        return <strong key={i} className="text-purple-400 font-extrabold">{part.slice(2, -2)}</strong>;
+      }
+      const codeParts = part.split(/(`.*?`)/g);
+      return codeParts.map((sub, j) => {
+        if (sub.startsWith('`') && sub.endsWith('`')) {
+          return <code key={j} className="bg-black/50 text-rose-400 font-mono text-[11px] px-1.5 py-0.5 rounded border border-white/5">{sub.slice(1, -1)}</code>;
+        }
+        return sub;
+      });
+    });
+  };
 
   return (
     <div className="space-y-6 animate-fadeInUp" id="economic-news-panel">
@@ -747,6 +860,42 @@ export default function EconomicNewsAnalysis({ language = 'fr' }: EconomicNewsPr
                           </span>
                         </div>
 
+                        {/* EXPERT MACRO TRIGGER ACTIONS */}
+                        <div className="mt-4 pt-3 border-t border-white/5 flex items-center justify-between">
+                          <div className="flex items-center gap-1">
+                            <Sparkles className="w-3.5 h-3.5 text-purple-400 animate-pulse" />
+                            <span className="text-[10px] font-mono text-slate-400 font-semibold">
+                              {isFr ? 'IA Expert Macro' : 'Macro Specialist AI'}
+                            </span>
+                          </div>
+                          
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleRequestExpertAnalysis(news);
+                            }}
+                            disabled={loadingAnalysisId !== null}
+                            className={`relative px-3.5 py-1.5 rounded-xl border text-[10px] uppercase font-black tracking-wider transition-all duration-300 flex items-center gap-1.5 cursor-pointer select-none overflow-hidden ${
+                              loadingAnalysisId === news.id
+                                ? 'bg-purple-900/40 border-purple-500/35 text-purple-300'
+                                : 'bg-gradient-to-r from-purple-950/20 to-indigo-950/20 hover:from-purple-900/30 hover:to-indigo-900/30 active:scale-[0.98] border-purple-500/25 hover:border-purple-500/50 text-purple-400 hover:text-purple-300 shadow-[0_2px_10px_rgba(168,85,247,0.02)] animate-pulse'
+                            }`}
+                          >
+                            {loadingAnalysisId === news.id ? (
+                              <>
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                <span>{isFr ? 'Consultation...' : 'Consulting...'}</span>
+                              </>
+                            ) : (
+                              <>
+                                <BrainCircuit className="w-3.5 h-3.5" />
+                                <span>{isFr ? "Demander l'analyse de l'Expert" : 'Demander l\'Expert'}</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
+
                       </div>
                     </div>
                   );
@@ -764,6 +913,148 @@ export default function EconomicNewsAnalysis({ language = 'fr' }: EconomicNewsPr
         </div>
 
       </div>
+
+      {/* OVERLAY MODAL: IA EXPERT ANALYSTE MACRO-ÉCONOMIQUE */}
+      {showAnalysisModal && (
+        <div className="fixed inset-0 z-50 bg-[#06080B]/85 backdrop-blur-md flex items-center justify-center p-4 md:p-6 animate-fadeIn">
+          
+          <div className="bg-[#0E1116] border border-purple-500/25 w-full max-w-3xl rounded-2xl shadow-2xl shadow-purple-500/5 overflow-hidden flex flex-col max-h-[85vh] relative animate-scaleIn">
+            
+            {/* Ambient Background Glow Gimmicks */}
+            <div className="absolute top-0 right-0 w-44 h-44 bg-purple-500/5 rounded-full blur-[60px] pointer-events-none" />
+            <div className="absolute bottom-0 left-0 w-44 h-44 bg-indigo-500/5 rounded-full blur-[60px] pointer-events-none" />
+
+            {/* Header */}
+            <div className="bg-[#0A0B0D] p-5 border-b border-white/5 flex items-center justify-between relative z-10">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-purple-500/10 text-purple-400 rounded-xl border border-purple-500/20">
+                  <BrainCircuit className="w-5 h-5 animate-pulse" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-slate-100 uppercase tracking-widest font-mono flex items-center gap-2">
+                    {isFr ? "Rapport de l'Expert Analytique IA" : "AI Macro Expert Report"}
+                    <span className="text-[9px] bg-purple-500/15 text-purple-300 px-2 py-0.5 rounded font-black font-mono tracking-wider animate-pulse">
+                      SMC / ICT
+                    </span>
+                  </h3>
+                  <p className="text-[10px] text-slate-400 font-mono mt-0.5">
+                    {isFr ? 'ANALYSE MACRO DE :' : 'MACRO ANALYSIS OF :'} <strong className="text-purple-350 font-semibold">{selectedAnalysisTitle}</strong>
+                  </p>
+                </div>
+              </div>
+              
+              <button
+                type="button"
+                onClick={() => setShowAnalysisModal(false)}
+                className="text-slate-400 hover:text-white p-1.5 hover:bg-white/5 rounded-lg transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Error banner info if present (though fallback is handled gracefully) */}
+            {analyzingError && (
+              <div className="bg-amber-500/10 border-y border-amber-500/20 text-amber-400 text-[10px] px-5 py-2 flex items-center gap-2 font-mono font-bold">
+                <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                <span>
+                  {isFr 
+                    ? `Note : Serveur de dialogue non connecté (${analyzingError}). Chargement du plan SMC local de secours d'analyse.` 
+                    : `Notice: Dialog Server is not responding (${analyzingError}). Loaded high-fidelity local SMC blueprint.`
+                  }
+                </span>
+              </div>
+            )}
+
+            {/* Body (Markdown Renderer) */}
+            <div className="p-6 md:p-8 overflow-y-auto flex-1 text-slate-300 text-xs leading-relaxed space-y-4 max-h-[550px]" style={{ scrollbarWidth: 'thin' }}>
+              {selectedNewsAnalysis ? (
+                selectedNewsAnalysis.split('\n').map((line, idx) => {
+                  if (line.startsWith('### ')) {
+                    return (
+                      <h3 key={idx} className="text-xs font-black text-purple-400 mt-6 mb-3 flex items-center gap-2 border-b border-purple-500/15 pb-1.5 uppercase tracking-wider font-mono">
+                        <Terminal className="w-4 h-4 text-purple-400" />
+                        {line.replace('### ', '')}
+                      </h3>
+                    );
+                  }
+                  if (line.startsWith('## ')) {
+                    return (
+                      <h2 key={idx} className="text-sm font-black text-slate-100 mt-5 mb-3 border-b border-white/5 pb-1.5 uppercase tracking-widest font-mono flex items-center gap-2">
+                        {line.replace('## ', '')}
+                      </h2>
+                    );
+                  }
+                  if (line.startsWith('# ')) {
+                    return (
+                      <h1 key={idx} className="text-base font-black text-slate-100 mt-6 mb-4 flex items-center gap-2 bg-[#0A0B0D] p-3 rounded-lg border border-white/5 font-mono">
+                        {line.replace('# ', '')}
+                      </h1>
+                    );
+                  }
+                  if (line.startsWith('- ') || line.startsWith('* ')) {
+                    return (
+                      <li key={idx} className="ml-5 list-disc text-slate-300 my-1 font-sans">
+                        {formatInlineMarkdown(line.substring(2))}
+                      </li>
+                    );
+                  }
+                  if (line.startsWith('---')) {
+                    return <hr key={idx} className="border-white/5 my-4" />;
+                  }
+                  if (line.trim() === '') {
+                    return <div key={idx} className="h-2" />;
+                  }
+                  return <p key={idx} className="mb-2 leading-relaxed text-slate-300">{formatInlineMarkdown(line)}</p>;
+                })
+              ) : (
+                <div className="flex flex-col items-center justify-center py-16 gap-3">
+                  <Loader2 className="w-8 h-8 text-purple-400 animate-spin" />
+                  <p className="text-[10px] uppercase font-bold tracking-widest font-mono text-slate-500">
+                    {isFr ? "Génération de l'analyse..." : "Generating Expert report..."}
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Footer with actions */}
+            <div className="bg-[#0A0B0D] p-4 border-t border-white/5 flex flex-col sm:flex-row items-center justify-between gap-3 relative z-10">
+              <div className="flex items-center gap-2 text-[10px] text-slate-400 font-bold font-mono">
+                <BookOpen className="w-4 h-4 text-purple-500 animate-pulse" />
+                <span>{isFr ? 'MÉTHODOLOGIE : SMART MONEY CONCEPTS (SMC / ICT)' : 'METHODOLOGY: SMART MONEY CONCEPTS (SMC / ICT)'}</span>
+              </div>
+              
+              <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                <button
+                  type="button"
+                  onClick={handleCopyAnalysis}
+                  className="px-4 py-2 rounded-xl text-[10px] uppercase font-black tracking-wider bg-[#161B22] border border-white/10 hover:bg-[#1E2530] text-slate-300 hover:text-white transition-all flex items-center gap-2 cursor-pointer"
+                >
+                  {copied ? (
+                    <>
+                      <ClipboardCheck className="w-3.5 h-3.5 text-emerald-400" />
+                      <span className="text-emerald-400">{isFr ? 'Copié !' : 'Copied!'}</span>
+                    </>
+                  ) : (
+                    <>
+                      <Clipboard className="w-3.5 h-3.5" />
+                      <span>{isFr ? 'Copier le Rapport' : 'Copy Report'}</span>
+                    </>
+                  )}
+                </button>
+                
+                <button
+                  type="button"
+                  onClick={() => setShowAnalysisModal(false)}
+                  className="px-5 py-2 rounded-xl text-[10px] uppercase font-black tracking-wider bg-purple-600 hover:bg-purple-700 text-white transition-all cursor-pointer shadow-lg shadow-purple-500/10"
+                >
+                  {isFr ? 'Fermer' : 'Close'}
+                </button>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      )}
 
     </div>
   );

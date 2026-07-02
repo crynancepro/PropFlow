@@ -70,7 +70,12 @@ export default function PremiumPage({
         
         {/* Banner header stating state */}
         <div className="text-center space-y-5 relative">
-          {isExpired ? (
+          {userEmail?.toLowerCase() === 'peter25ngouala@gmail.com' ? (
+            <div className="inline-flex items-center gap-1.5 bg-emerald-500/10 border border-emerald-500/20 px-4 py-1.5 rounded-full text-emerald-400 font-mono text-[11px] font-black tracking-widest uppercase shadow-[0_0_15px_rgba(16,185,129,0.15)]">
+              <Crown className="w-3.5 h-3.5 fill-emerald-400 text-emerald-400" />
+              Accès Spécial Administrateur (Gratuit)
+            </div>
+          ) : isExpired ? (
             <div className="inline-flex items-center gap-1.5 bg-rose-500/10 border border-rose-500/20 px-4 py-1.5 rounded-full text-rose-400 font-mono text-[11px] font-black tracking-widest uppercase animate-pulse">
               <Lock className="w-3.5 h-3.5" />
               Essai Gratuit Terminé ({hoursElapsed}h écoulées)
@@ -197,57 +202,76 @@ export default function PremiumPage({
                 <div className="text-xs text-slate-300 font-black truncate">{userEmail || "Trading local (Essai)"}</div>
               </div>
 
-              {error && (
-                <div className="bg-rose-500/10 border border-rose-500/25 p-3 rounded-xl text-[11px] text-rose-400 font-medium leading-normal text-left space-y-1 animate-fadeIn">
-                  <span className="font-bold text-red-400 block">⚠️ Échec d'activation :</span>
-                  <span>{error}</span>
+              {userEmail?.toLowerCase() === 'peter25ngouala@gmail.com' ? (
+                <div className="space-y-5 animate-fadeIn">
+                  <div className="bg-emerald-500/10 border border-emerald-500/20 p-4 rounded-xl text-left space-y-2">
+                    <span className="text-xs font-bold text-emerald-400 flex items-center gap-1.5 leading-none">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                      Accès Gratuit Actif
+                    </span>
+                    <p className="text-[10px] text-slate-300 leading-normal font-medium">
+                      Votre adresse e-mail a été spécifiquement répertoriée pour bénéficier de l'accès Premium gratuit et illimité de PropFlow. Pas besoin de paiement !
+                    </p>
+                  </div>
+                  <div className="bg-[#0A0B0D] border border-white/5 px-4 py-3 rounded-xl text-[10px] text-slate-400 font-semibold font-mono flex items-center justify-center gap-1.5">
+                    👑 LICENCE VIP ACTIVÉE
+                  </div>
                 </div>
-              )}
+              ) : (
+                <>
+                  {error && (
+                    <div className="bg-rose-500/10 border border-rose-500/25 p-3 rounded-xl text-[11px] text-rose-400 font-medium leading-normal text-left space-y-1 animate-fadeIn">
+                      <span className="font-bold text-red-400 block">⚠️ Échec d'activation :</span>
+                      <span>{error}</span>
+                    </div>
+                  )}
 
-              {invoiceUrl && (
-                <div className="bg-emerald-500/10 border border-emerald-500/20 p-4 rounded-xl text-left space-y-3 animate-fadeIn">
-                  <span className="text-xs font-bold text-emerald-400 flex items-center gap-1.5 leading-none">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping inline-block" />
-                    Facture Prête !
-                  </span>
-                  <p className="text-[10px] text-slate-300 leading-normal font-medium">
-                    Si l'onglet indépendant n'a pas réussi à s'ouvrir automatiquement, cliquez sur le bouton vert ci-dessous :
-                  </p>
-                  <a
-                    href={invoiceUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="w-full flex items-center justify-center gap-1.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold text-[11px] uppercase tracking-wider py-3 rounded-xl cursor-pointer hover:shadow-[0_0_15px_rgba(16,185,129,0.2)] hover:scale-[1.01] transition-all"
+                  {invoiceUrl && (
+                    <div className="bg-emerald-500/10 border border-emerald-500/20 p-4 rounded-xl text-left space-y-3 animate-fadeIn">
+                      <span className="text-xs font-bold text-emerald-400 flex items-center gap-1.5 leading-none">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping inline-block" />
+                        Facture Prête !
+                      </span>
+                      <p className="text-[10px] text-slate-300 leading-normal font-medium">
+                        Si l'onglet indépendant n'a pas réussi à s'ouvrir automatiquement, cliquez sur le bouton vert ci-dessous :
+                      </p>
+                      <a
+                        href={invoiceUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="w-full flex items-center justify-center gap-1.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold text-[11px] uppercase tracking-wider py-3 rounded-xl cursor-pointer hover:shadow-[0_0_15px_rgba(16,185,129,0.2)] hover:scale-[1.01] transition-all"
+                      >
+                        Ouvrir la Facture Crypto
+                        <ArrowRight className="w-3.5 h-3.5" />
+                      </a>
+                    </div>
+                  )}
+
+                  <button
+                    disabled={loading}
+                    onClick={handleActivatePremium}
+                    className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500 hover:from-amber-400 hover:to-yellow-350 text-black font-extrabold text-xs uppercase tracking-wider py-4 rounded-xl cursor-pointer hover:shadow-[0_0_20px_rgba(242,193,46,0.25)] hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    Ouvrir la Facture Crypto
-                    <ArrowRight className="w-3.5 h-3.5" />
-                  </a>
-                </div>
+                    {loading ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin text-black" />
+                        Génération...
+                      </>
+                    ) : (
+                      <>
+                        <Crown className="w-4 h-4 fill-black text-black" />
+                        Activer mon accès Premium
+                        <ArrowRight className="w-4 h-4" />
+                      </>
+                    )}
+                  </button>
+
+                  <div className="flex items-center justify-center gap-1.5 text-[10px] text-slate-500 font-semibold font-mono">
+                    <CreditCard className="w-3.5 h-3.5" />
+                    Passerelle NOWPayments
+                  </div>
+                </>
               )}
-
-              <button
-                disabled={loading}
-                onClick={handleActivatePremium}
-                className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500 hover:from-amber-400 hover:to-yellow-350 text-black font-extrabold text-xs uppercase tracking-wider py-4 rounded-xl cursor-pointer hover:shadow-[0_0_20px_rgba(242,193,46,0.25)] hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {loading ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin text-black" />
-                    Génération...
-                  </>
-                ) : (
-                  <>
-                    <Crown className="w-4 h-4 fill-black text-black" />
-                    Activer mon accès Premium
-                    <ArrowRight className="w-4 h-4" />
-                  </>
-                )}
-              </button>
-
-              <div className="flex items-center justify-center gap-1.5 text-[10px] text-slate-500 font-semibold font-mono">
-                <CreditCard className="w-3.5 h-3.5" />
-                Passerelle NOWPayments
-              </div>
             </div>
 
           </div>

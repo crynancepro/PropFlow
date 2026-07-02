@@ -6,6 +6,10 @@ export interface TradingAccount {
   startingBalance: number;
   currency: string;
   createdAt: string;
+  phase1TargetPercent?: number;
+  phase2TargetPercent?: number;
+  dailyDrawdownPercent?: number;
+  maxDrawdownPercent?: number;
 }
 
 export interface UserProfile {

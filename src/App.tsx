@@ -3,10 +3,6 @@ import { Trade, UserProfile, MarketOpportunity, TradingAccount } from './types';
 import { Language, TRANSLATIONS } from './utils/i18n';
 import StatsDashboard from './components/StatsDashboard';
 import TradeJournal from './components/TradeJournal';
-import MarketAlerts from './components/MarketAlerts';
-import BacktestTool from './components/BacktestTool';
-import BackupSecurity from './components/BackupSecurity';
-import AICoach from './components/AICoach';
 import AccountManager from './components/AccountManager';
 import DataTicker from './components/DataTicker';
 import EconomicNewsAnalysis from './components/EconomicNewsAnalysis';
@@ -14,6 +10,9 @@ import WorkspaceLinks from './components/WorkspaceLinks';
 import FirebaseAuthentication from './components/FirebaseAuthentication';
 import { createPremiumInvoice } from './services/nowpayments';
 import PremiumPage from './pages/Premium';
+import TradingViewCharts from './components/TradingViewCharts';
+import SalaryDashboard from './pages/SalaryDashboard';
+import { playHighTechClick } from './utils/soundEffects';
 
 import { 
   auth, db, isConfigured, loginWithGoogle, logoutUser, handleFirestoreError, OperationType, sanitizeFirestoreData 
@@ -22,9 +21,9 @@ import { doc, setDoc, getDoc, collection, onSnapshot, deleteDoc, updateDoc, serv
 import { onAuthStateChanged, type User as FirebaseUser } from 'firebase/auth';
 
 import { 
-  TrendingUp, BarChart2, BookOpen, BrainCircuit, PlayCircle, ShieldCheck, 
+  TrendingUp, BarChart2, BookOpen, PlayCircle, ShieldCheck, 
   Settings, LogIn, LogOut, RefreshCw, HelpCircle, BadgeCheck, DollarSign, Globe, Monitor,
-  Sun, Moon, Crown
+  Sun, Moon, Crown, Tv, Coins
 } from 'lucide-react';
 
 const DEFAULT_TRADES: Trade[] = [
@@ -98,7 +97,7 @@ const DEFAULT_TRADES: Trade[] = [
 ];
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'STATS' | 'JOURNAL' | 'NEWS' | 'WORKSPACE' | 'OPPORTUNITIES' | 'BACKTEST' | 'COACH' | 'SECURITY' | 'PREMIUM'>('STATS');
+  const [activeTab, setActiveTab] = useState<'STATS' | 'JOURNAL' | 'NEWS' | 'WORKSPACE' | 'CHARTS' | 'SALARY' | 'PREMIUM'>('STATS');
   const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
   const [demoUser, setDemoUser] = useState<{ uid: string; email: string; displayName?: string } | null>(() => {
     const saved = localStorage.getItem('trading_demo_user');
@@ -145,7 +144,12 @@ export default function App() {
   // User configs
   const [startingBalance, setStartingBalance] = useState<number>(100000);
   const [currency, setCurrency] = useState<string>('USD');
-  const [isPremium, setIsPremium] = useState<boolean>(false);
+  const [isPremiumState, setIsPremiumState] = useState<boolean>(false);
+  // Seul cet email bénéficie de l'accès gratuit permanent sur le site
+  const isPremium = (activeUser?.email?.toLowerCase() === "peter25ngouala@gmail.com") || isPremiumState;
+  const setIsPremium = (val: boolean) => {
+    setIsPremiumState(val);
+  };
   const [userCreatedAt, setUserCreatedAt] = useState<string | null>(null);
   const [trades, setTrades] = useState<Trade[]>([]);
   const [loadingCloud, setLoadingCloud] = useState<boolean>(false);
@@ -499,7 +503,17 @@ export default function App() {
     }
   };
 
-  const handleAddAccount = async (name: string, type: 'PROPFIRM' | 'BROKER', firmOrBrokerName: string, startingBalanceVal: number, currencyVal: string) => {
+  const handleAddAccount = async (
+    name: string,
+    type: 'PROPFIRM' | 'BROKER',
+    firmOrBrokerName: string,
+    startingBalanceVal: number,
+    currencyVal: string,
+    phase1TargetPercent?: number,
+    phase2TargetPercent?: number,
+    dailyDrawdownPercent?: number,
+    maxDrawdownPercent?: number
+  ) => {
     const newAcc: TradingAccount = {
       id: "account_" + Date.now().toString(),
       name,
@@ -507,7 +521,11 @@ export default function App() {
       firmOrBrokerName,
       startingBalance: startingBalanceVal,
       currency: currencyVal,
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
+      phase1TargetPercent,
+      phase2TargetPercent,
+      dailyDrawdownPercent,
+      maxDrawdownPercent
     };
 
     const updatedAccs = [...accounts, newAcc];
@@ -696,6 +714,10 @@ export default function App() {
   const activeTrades = React.useMemo(() => {
     return trades.filter(t => t.accountId === activeAccountId || (!t.accountId && activeAccountId === 'default-propfirm'));
   }, [trades, activeAccountId]);
+
+  const activeAccount = React.useMemo(() => {
+    return accounts.find(a => a.id === activeAccountId);
+  }, [accounts, activeAccountId]);
 
   if (authResolving) {
     return (
@@ -927,20 +949,18 @@ export default function App() {
             {[
               { id: 'STATS', label: TRANSLATIONS[language].tabDashboard, icon: BarChart2, color: 'text-sky-400' },
               { id: 'JOURNAL', label: TRANSLATIONS[language].tabJournal, icon: BookOpen, color: 'text-emerald-400' },
+              { id: 'SALARY', label: TRANSLATIONS[language].tabSalary || "Revenus & Payouts", icon: Coins, color: 'text-rose-400' },
               { id: 'NEWS', label: TRANSLATIONS[language].tabNews, icon: Globe, color: 'text-cyan-400' },
               { id: 'WORKSPACE', label: TRANSLATIONS[language].tabWorkspace, icon: Monitor, color: 'text-teal-400' },
-              { id: 'OPPORTUNITIES', label: TRANSLATIONS[language].tabAlerts, icon: TrendingUp, color: 'text-rose-400' },
-              { id: 'BACKTEST', label: TRANSLATIONS[language].tabBacktesting, icon: PlayCircle, color: 'text-amber-400' },
-              { id: 'COACH', label: TRANSLATIONS[language].tabCoach, icon: BrainCircuit, color: 'text-purple-400' },
-              { id: 'SECURITY', label: TRANSLATIONS[language].tabSecurity, icon: Settings, color: 'text-slate-400' },
-              { id: 'PREMIUM', label: '👑 Premium', icon: Crown, color: 'text-amber-400 font-black' }
+              { id: 'CHARTS', label: TRANSLATIONS[language].tabCharts || 'Double Graphique', icon: Tv, color: 'text-pink-400' },
+              { id: 'PREMIUM', label: '👑 Premium', icon: Crown, color: 'text-amber-400' }
             ].map((tab) => {
               const IconComp = tab.icon;
               const isActive = activeTab === tab.id;
               return (
                 <button
                   key={tab.id}
-                  onClick={() => setActiveTab(tab.id as any)}
+                  onClick={() => { playHighTechClick(); setActiveTab(tab.id as any); }}
                   className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold font-sans tracking-wide rounded-xl transition-all cursor-pointer ${
                     isActive 
                       ? (tab.id === 'PREMIUM'
@@ -982,6 +1002,7 @@ export default function App() {
                 startingBalance={startingBalance} 
                 currency={currency} 
                 language={language}
+                activeAccount={activeAccount}
               />
             </div>
           )}
@@ -1016,31 +1037,19 @@ export default function App() {
             <WorkspaceLinks language={language} />
           )}
 
-          {!loadingCloud && activeTab === 'OPPORTUNITIES' && (
-            <MarketAlerts 
-              onCopyOpportunityToJournal={handleCopyOpportunity} 
-            />
-          )}
-
-          {!loadingCloud && activeTab === 'BACKTEST' && (
-            <BacktestTool />
-          )}
-
-          {!loadingCloud && activeTab === 'COACH' && (
-            <AICoach 
+          {!loadingCloud && activeTab === 'SALARY' && (
+            <SalaryDashboard 
               trades={activeTrades} 
-              startingBalance={startingBalance} 
+              language={language} 
               currency={currency} 
             />
           )}
 
-          {!loadingCloud && activeTab === 'SECURITY' && (
-            <BackupSecurity 
-              trades={trades}
-              startingBalance={startingBalance}
-              currency={currency}
-              isCloudSynced={!!currentUser}
-              onRestoreData={handleRestoreDecryptData}
+          {!loadingCloud && activeTab === 'CHARTS' && (
+            <TradingViewCharts 
+              language={language} 
+              isPremium={isPremium} 
+              onUpgradeClick={() => setActiveTab('PREMIUM')}
             />
           )}
 
