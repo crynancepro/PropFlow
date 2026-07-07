@@ -521,7 +521,7 @@ export default function SalaryDashboard({ trades, language, currency }: SalaryDa
                   <Tooltip 
                     contentStyle={{ backgroundColor: '#0E1116', borderColor: 'rgba(255,255,255,0.08)', borderRadius: '12px' }}
                     labelStyle={{ color: '#94a3b8', fontWeight: 'bold', fontSize: '11px' }}
-                    itemStyle={{ fontSize: '11px', fontWeight: 'bold' }}
+                    itemStyle={{ color: '#FFFFFF', fontSize: '11px', fontWeight: 'bold' }}
                   />
                   <ReferenceLine y={0} stroke="#475569" />
                   <Bar name={isFr ? "Performance brute" : "Raw Performance"} dataKey="Performance brute" fill="#38bdf8" fillOpacity={0.25} radius={[4, 4, 0, 0]} />
@@ -545,7 +545,7 @@ export default function SalaryDashboard({ trades, language, currency }: SalaryDa
                   <Tooltip 
                     contentStyle={{ backgroundColor: '#0E1116', borderColor: 'rgba(255,255,255,0.08)', borderRadius: '12px' }}
                     labelStyle={{ color: '#94a3b8', fontWeight: 'bold', fontSize: '11px' }}
-                    itemStyle={{ fontSize: '11px', fontWeight: 'bold' }}
+                    itemStyle={{ color: '#FFFFFF', fontSize: '11px', fontWeight: 'bold' }}
                   />
                   <Area type="monotone" name={isFr ? "Balance Modélisée" : "Modelled Balance"} dataKey="Solde du Compte" stroke="#38bdf8" strokeWidth={2.5} fillOpacity={1} fill="url(#colorBalance)" />
                   <Area type="monotone" name={isFr ? "Payouts Cumulés" : "Cumulative Payouts"} dataKey="Payouts Cumulés" stroke="#ec4899" strokeWidth={2.5} fillOpacity={1} fill="url(#colorPayouts)" />

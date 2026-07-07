@@ -4,7 +4,8 @@ import { motion, AnimatePresence } from 'motion/react';
 import { 
   Plus, Search, Calendar, Edit2, CheckCircle, Trash2, X, Star, Filter, 
   TrendingUp, TrendingDown, BookOpen, Camera, Globe, ChevronLeft, ChevronRight, 
-  Settings, ChevronUp, ChevronDown, Check, Download, Layers, Eye
+  Settings, ChevronUp, ChevronDown, Check, Download, Layers, Eye, EyeOff,
+  Mic, MicOff, Maximize2, Minimize2
 } from 'lucide-react';
 import { ResponsiveContainer, AreaChart, Area } from 'recharts';
 
@@ -38,6 +39,94 @@ const MONTHS_EN = [
   "July", "August", "September", "October", "November", "December"
 ];
 
+const VoiceInputButton = ({ 
+  value, 
+  onChange, 
+  language = 'fr'
+}: { 
+  value: string; 
+  onChange: (val: string) => void;
+  language?: 'fr' | 'en';
+}) => {
+  const [isListening, setIsListening] = React.useState(false);
+  const [supported, setSupported] = React.useState(false);
+
+  React.useEffect(() => {
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (SpeechRecognition) {
+      setSupported(true);
+    }
+  }, []);
+
+  if (!supported) return null;
+
+  const toggleListening = () => {
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) return;
+
+    if (isListening) {
+      setIsListening(false);
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.continuous = false;
+    recognition.lang = language === 'fr' ? 'fr-FR' : 'en-US';
+    recognition.interimResults = false;
+
+    recognition.onstart = () => {
+      setIsListening(true);
+    };
+
+    recognition.onerror = (event: any) => {
+      console.error(event);
+      setIsListening(false);
+    };
+
+    recognition.onend = () => {
+      setIsListening(false);
+    };
+
+    recognition.onresult = (event: any) => {
+      const transcript = event.results[0][0].transcript;
+      if (transcript) {
+        const spacing = value && !value.endsWith(' ') ? ' ' : '';
+        onChange(value + spacing + transcript);
+      }
+    };
+
+    recognition.start();
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={toggleListening}
+      className={`px-2 py-1 rounded-md transition-all cursor-pointer flex items-center gap-1.5 border text-[10px] font-black font-mono ${
+        isListening 
+          ? 'bg-rose-500/15 border-rose-500/40 text-rose-400 animate-pulse' 
+          : 'bg-[#0A0B0D] border-white/5 text-slate-400 hover:text-white hover:border-white/10'
+      }`}
+      title={isListening 
+        ? (language === 'fr' ? "Enregistrement en cours... Cliquez pour arrêter." : "Recording... Click to stop.")
+        : (language === 'fr' ? "Dicter des notes" : "Voice dictation")
+      }
+    >
+      {isListening ? (
+        <>
+          <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping shrink-0" />
+          <span>Listening</span>
+        </>
+      ) : (
+        <>
+          <Mic className="w-3.5 h-3.5" />
+          <span>{language === 'fr' ? "DICTÉE" : "DICTATE"}</span>
+        </>
+      )}
+    </button>
+  );
+};
+
 export default function TradeJournal({ 
   trades, 
   onAddTrade, 
@@ -66,6 +155,8 @@ export default function TradeJournal({
   // Bulk actions selection state
   const [selectedTradeIds, setSelectedTradeIds] = useState<Set<string>>(new Set());
   const [showBulkActionsMenu, setShowBulkActionsMenu] = useState(false);
+  const [maskAmounts, setMaskAmounts] = useState<boolean>(() => localStorage.getItem('trading_mask_amounts') === 'true');
+  const [isFullScreen, setIsFullScreen] = React.useState(false);
 
   // Lightbox & details state
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
@@ -923,7 +1014,10 @@ export default function TradeJournal({
               </div>
 
               <div className="flex flex-col">
-                <label className="text-xs text-slate-400 font-semibold mb-1">Notes du trade</label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs text-slate-400 font-semibold">{language === 'fr' ? "Notes du trade" : "Trade Notes"}</label>
+                  <VoiceInputButton value={notes} onChange={setNotes} language={language} />
+                </div>
                 <textarea 
                   rows={2}
                   placeholder="Ressenti, discipline, analyse..."
@@ -1334,12 +1428,40 @@ export default function TradeJournal({
       {/* -----------------------------------------------------------
           SECTION 3: LA LISTE DE POSITIONS AMÉLIORÉE
           ----------------------------------------------------------- */}
-      <div className="bg-[#111622] border border-white/5 rounded-2xl p-6 space-y-4" id="positions-table-dashboard">
+      <div 
+        className={isFullScreen 
+          ? "fixed inset-0 z-[120] bg-[#0A0D14]/98 backdrop-blur-md p-6 md:p-8 overflow-y-auto space-y-4 flex flex-col justify-start border border-white/10 shadow-2xl" 
+          : "bg-[#111622] border border-white/5 rounded-2xl p-6 space-y-4"
+        } 
+        id="positions-table-dashboard"
+      >
         
         {/* Bulk Header actions */}
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/5 pb-4">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
             <span className="font-semibold text-sm text-slate-300 uppercase tracking-wide font-mono">Positions clôturées</span>
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => {
+                  const newVal = !maskAmounts;
+                  setMaskAmounts(newVal);
+                  localStorage.setItem('trading_mask_amounts', String(newVal));
+                }}
+                className="p-1.5 hover:bg-white/5 rounded-lg text-slate-400 hover:text-white transition-all cursor-pointer flex items-center justify-center border border-white/5"
+                title={maskAmounts ? (language === 'fr' ? "Afficher les montants" : "Show amounts") : (language === 'fr' ? "Masquer les montants" : "Hide amounts")}
+              >
+                {maskAmounts ? <EyeOff className="w-3.5 h-3.5 text-pink-400" /> : <Eye className="w-3.5 h-3.5 text-slate-400" />}
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsFullScreen(!isFullScreen)}
+                className="p-1.5 hover:bg-white/5 rounded-lg text-slate-400 hover:text-white transition-all cursor-pointer flex items-center justify-center border border-white/5"
+                title={isFullScreen ? (language === 'fr' ? "Quitter le plein écran" : "Exit full screen") : (language === 'fr' ? "Plein écran" : "Full screen")}
+              >
+                {isFullScreen ? <Minimize2 className="w-3.5 h-3.5 text-pink-400" /> : <Maximize2 className="w-3.5 h-3.5 text-slate-400" />}
+              </button>
+            </div>
             {selectedTradeIds.size > 0 && (
               <span className="text-xs bg-emerald-500/10 text-emerald-400 border border-emerald-500/25 px-2.5 py-0.5 rounded-full font-bold">
                 {selectedTradeIds.size} sélectionné(s)
@@ -1468,16 +1590,16 @@ export default function TradeJournal({
                         {trade.closedAt ? new Date(trade.closedAt).toLocaleDateString('fr-FR') : '--'}
                       </td>
                       <td className="py-3 px-3 text-right font-mono">
-                        {trade.entryPrice ? `${trade.entryPrice.toLocaleString()} $` : '0.00 $'}
+                        {maskAmounts ? '••••' : (trade.entryPrice ? `${trade.entryPrice.toLocaleString()} $` : '0.00 $')}
                       </td>
                       <td className="py-3 px-3 text-right font-mono">
-                        {trade.exitPrice ? `${trade.exitPrice.toLocaleString()} $` : '--'}
+                        {maskAmounts ? '••••' : (trade.exitPrice ? `${trade.exitPrice.toLocaleString()} $` : '--')}
                       </td>
                       <td className={`py-3 px-3 text-right font-bold font-mono ${isProfit ? 'text-emerald-400' : 'text-rose-500'}`}>
-                        {isProfit ? '+' : ''}{(trade.pnl || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} $
+                        {maskAmounts ? '••••' : `${isProfit ? '+' : ''}${(trade.pnl || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} $`}
                       </td>
                       <td className={`py-3 px-3 text-right font-bold font-mono ${isProfit ? 'text-emerald-400' : 'text-rose-500'}`}>
-                        {roiVal >= 0 ? '+' : ''}{roiVal.toFixed(2)}%
+                        {maskAmounts ? '••••' : `${roiVal >= 0 ? '+' : ''}${roiVal.toFixed(2)}%`}
                       </td>
                       <td className="py-3 px-3">
                         <div className="flex items-center justify-center gap-1.5 flex-wrap">
@@ -1575,7 +1697,10 @@ export default function TradeJournal({
               </div>
 
               <div className="space-y-2">
-                <label className="text-xs text-slate-400">Ressenti psychologique, bilan de la journée, respect de la discipline :</label>
+                <div className="flex items-center justify-between">
+                  <label className="text-xs text-slate-400">Ressenti psychologique, bilan de la journée, respect de la discipline :</label>
+                  <VoiceInputButton value={editingNoteText} onChange={setEditingNoteText} language={language} />
+                </div>
                 <textarea
                   rows={6}
                   value={editingNoteText}
@@ -1807,7 +1932,10 @@ export default function TradeJournal({
               </div>
 
               <div className="flex flex-col">
-                <label className="text-xs text-slate-400 font-semibold mb-1">Notes psychologiques & techniques</label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs text-slate-400 font-semibold">Notes psychologiques & techniques</label>
+                  <VoiceInputButton value={editNotes} onChange={setEditNotes} language={language} />
+                </div>
                 <textarea 
                   rows={3}
                   value={editNotes}

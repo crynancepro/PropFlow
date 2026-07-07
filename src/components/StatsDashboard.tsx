@@ -2009,7 +2009,7 @@ export default function StatsDashboard({ trades, startingBalance, currency, lang
                     <Tooltip 
                       contentStyle={{ backgroundColor: '#10141B', borderColor: 'rgba(255, 255, 255, 0.08)', borderRadius: '8px' }}
                       labelStyle={{ color: '#94A3B8', fontWeight: 'bold', fontSize: 10, fontFamily: 'JetBrains Mono' }}
-                      itemStyle={{ fontSize: 11, fontFamily: 'JetBrains Mono' }}
+                      itemStyle={{ color: '#FFFFFF', fontSize: 11, fontFamily: 'JetBrains Mono' }}
                       formatter={(v: any) => [`${Number(v).toLocaleString()} ${currency}`, 'PnL']}
                     />
                     <Bar dataKey="pnl" radius={[4, 4, 0, 0]}>

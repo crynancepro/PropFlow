@@ -5,7 +5,6 @@ import StatsDashboard from './components/StatsDashboard';
 import TradeJournal from './components/TradeJournal';
 import AccountManager from './components/AccountManager';
 import DataTicker from './components/DataTicker';
-import EconomicNewsAnalysis from './components/EconomicNewsAnalysis';
 import WorkspaceLinks from './components/WorkspaceLinks';
 import FirebaseAuthentication from './components/FirebaseAuthentication';
 import { createPremiumInvoice } from './services/nowpayments';
@@ -97,7 +96,7 @@ const DEFAULT_TRADES: Trade[] = [
 ];
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'STATS' | 'JOURNAL' | 'NEWS' | 'WORKSPACE' | 'CHARTS' | 'SALARY' | 'PREMIUM'>('STATS');
+  const [activeTab, setActiveTab] = useState<'STATS' | 'JOURNAL' | 'WORKSPACE' | 'CHARTS' | 'SALARY' | 'PREMIUM'>('STATS');
   const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
   const [demoUser, setDemoUser] = useState<{ uid: string; email: string; displayName?: string } | null>(() => {
     const saved = localStorage.getItem('trading_demo_user');
@@ -940,128 +939,125 @@ export default function App() {
       </header>
 
       {/* Primary Panels Layout */}
-      <main className="max-w-7xl mx-auto px-4 py-6 lg:px-8 space-y-6">
-        
-        {/* Core Tab Nav Links */}
-        <div className="bg-[#0E1116]/80 backdrop-blur rounded-2xl border border-white/5 p-1.5 shadow-xl relative overflow-hidden" id="tabs-main-wrapper">
-          <div className="absolute top-0 left-0 w-32 h-32 bg-sky-500/5 rounded-full blur-[40px] pointer-events-none" />
-          <nav className="flex items-center gap-1 overflow-x-auto scroller-none relative z-10" id="tabs-main-nav">
-            {[
-              { id: 'STATS', label: TRANSLATIONS[language].tabDashboard, icon: BarChart2, color: 'text-sky-400' },
-              { id: 'JOURNAL', label: TRANSLATIONS[language].tabJournal, icon: BookOpen, color: 'text-emerald-400' },
-              { id: 'SALARY', label: TRANSLATIONS[language].tabSalary || "Revenus & Payouts", icon: Coins, color: 'text-rose-400' },
-              { id: 'NEWS', label: TRANSLATIONS[language].tabNews, icon: Globe, color: 'text-cyan-400' },
-              { id: 'WORKSPACE', label: TRANSLATIONS[language].tabWorkspace, icon: Monitor, color: 'text-teal-400' },
-              { id: 'CHARTS', label: TRANSLATIONS[language].tabCharts || 'Double Graphique', icon: Tv, color: 'text-pink-400' },
-              { id: 'PREMIUM', label: '👑 Premium', icon: Crown, color: 'text-amber-400' }
-            ].map((tab) => {
-              const IconComp = tab.icon;
-              const isActive = activeTab === tab.id;
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => { playHighTechClick(); setActiveTab(tab.id as any); }}
-                  className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold font-sans tracking-wide rounded-xl transition-all cursor-pointer ${
-                    isActive 
-                      ? (tab.id === 'PREMIUM'
-                        ? 'bg-gradient-to-r from-amber-500/15 to-yellow-500/2 border border-amber-500/30 text-amber-400 shadow-[0_0_15px_rgba(245,158,11,0.12)]'
-                        : 'bg-gradient-to-r from-sky-500/10 to-sky-500/2 border border-sky-500/20 text-sky-400 shadow-[0_0_15px_rgba(14,165,233,0.08)]') 
-                      : 'border border-transparent text-slate-400 hover:text-slate-200 hover:bg-white/3'
-                  }`}
-                >
-                  <IconComp className={`w-4 h-4 ${isActive ? tab.color : 'text-slate-400'}`} />
-                  {tab.label}
-                </button>
-              );
-            })}
-          </nav>
-        </div>
+      <main className="max-w-7xl mx-auto px-4 py-6 lg:px-8">
+        <div className="flex flex-col lg:flex-row gap-6 items-start">
+          
+          {/* Core Tab Nav Links (Vertical Sidebar on the left) */}
+          <div className="w-full lg:w-64 shrink-0 bg-[#0E1116]/80 backdrop-blur rounded-2xl border border-white/5 p-3 shadow-xl relative overflow-hidden" id="tabs-main-wrapper">
+            <div className="absolute top-0 left-0 w-32 h-32 bg-sky-500/5 rounded-full blur-[40px] pointer-events-none" />
+            <nav className="flex flex-col gap-1.5 relative z-10" id="tabs-main-nav">
+              {[
+                { id: 'STATS', label: TRANSLATIONS[language].tabDashboard, icon: BarChart2, color: 'text-sky-400' },
+                { id: 'JOURNAL', label: TRANSLATIONS[language].tabJournal, icon: BookOpen, color: 'text-emerald-400' },
+                { id: 'SALARY', label: TRANSLATIONS[language].tabSalary || "Revenus & Payouts", icon: Coins, color: 'text-rose-400' },
+                { id: 'WORKSPACE', label: TRANSLATIONS[language].tabWorkspace, icon: Monitor, color: 'text-teal-400' },
+                { id: 'CHARTS', label: TRANSLATIONS[language].tabCharts || 'Double Graphique', icon: Tv, color: 'text-pink-400' },
+                { id: 'PREMIUM', label: '👑 Premium', icon: Crown, color: 'text-amber-400' }
+              ].map((tab) => {
+                const IconComp = tab.icon;
+                const isActive = activeTab === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => { playHighTechClick(); setActiveTab(tab.id as any); }}
+                    className={`flex items-center gap-3 px-4 py-3 text-xs font-bold font-sans tracking-wide rounded-xl transition-all cursor-pointer w-full text-left justify-start ${
+                      isActive 
+                        ? (tab.id === 'PREMIUM'
+                          ? 'bg-gradient-to-r from-amber-500/15 to-yellow-500/2 border border-amber-500/30 text-amber-400 shadow-[0_0_15px_rgba(245,158,11,0.12)]'
+                          : 'bg-gradient-to-r from-sky-500/10 to-sky-500/2 border border-sky-500/20 text-sky-400 shadow-[0_0_15px_rgba(14,165,233,0.08)]') 
+                        : 'border border-transparent text-slate-400 hover:text-slate-200 hover:bg-white/3'
+                    }`}
+                  >
+                    <IconComp className={`w-4 h-4 shrink-0 ${isActive ? tab.color : 'text-slate-400'}`} />
+                    <span className="truncate">{tab.label}</span>
+                  </button>
+                );
+              })}
+            </nav>
+          </div>
 
-        {/* Dynamic Display components based on active tab state */}
-        <div className="min-h-[480px]">
-          {loadingCloud && (
-            <div className="flex flex-col items-center justify-center py-24 space-y-3">
-              <RefreshCw className="w-8 h-8 text-sky-400 animate-spin" />
-              <p className="text-xs text-slate-400 font-medium">{TRANSLATIONS[language].syncProgress}</p>
-            </div>
-          )}
+          {/* Dynamic Display components based on active tab state */}
+          <div className="flex-1 w-full min-w-0 min-h-[480px]">
+            {loadingCloud && (
+              <div className="flex flex-col items-center justify-center py-24 space-y-3">
+                <RefreshCw className="w-8 h-8 text-sky-400 animate-spin" />
+                <p className="text-xs text-slate-400 font-medium">{TRANSLATIONS[language].syncProgress}</p>
+              </div>
+            )}
 
-          {!loadingCloud && activeTab === 'STATS' && (
-            <div className="space-y-6">
-              <AccountManager 
-                accounts={accounts}
-                activeAccountId={activeAccountId}
-                onSelectAccount={handleSelectAccount}
-                onAddAccount={handleAddAccount}
-                onDeleteAccount={handleDeleteAccount}
-                trades={trades}
-                language={language}
-              />
-              <StatsDashboard 
+            {!loadingCloud && activeTab === 'STATS' && (
+              <div className="space-y-6">
+                <AccountManager 
+                  accounts={accounts}
+                  activeAccountId={activeAccountId}
+                  onSelectAccount={handleSelectAccount}
+                  onAddAccount={handleAddAccount}
+                  onDeleteAccount={handleDeleteAccount}
+                  trades={trades}
+                  language={language}
+                />
+                <StatsDashboard 
+                  trades={activeTrades} 
+                  startingBalance={startingBalance} 
+                  currency={currency} 
+                  language={language}
+                  activeAccount={activeAccount}
+                />
+              </div>
+            )}
+
+            {!loadingCloud && activeTab === 'JOURNAL' && (
+              <div className="space-y-6">
+                <AccountManager 
+                  accounts={accounts}
+                  activeAccountId={activeAccountId}
+                  onSelectAccount={handleSelectAccount}
+                  onAddAccount={handleAddAccount}
+                  onDeleteAccount={handleDeleteAccount}
+                  trades={trades}
+                  language={language}
+                />
+                <TradeJournal 
+                  trades={activeTrades}
+                  onAddTrade={handleAddNewTrade}
+                  onUpdateTrade={handleUpdateTrade}
+                  onDeleteTrade={handleDeleteTrade}
+                  currency={currency}
+                  language={language}
+                />
+              </div>
+            )}
+
+            {!loadingCloud && activeTab === 'WORKSPACE' && (
+              <WorkspaceLinks language={language} />
+            )}
+
+            {!loadingCloud && activeTab === 'SALARY' && (
+              <SalaryDashboard 
                 trades={activeTrades} 
-                startingBalance={startingBalance} 
+                language={language} 
                 currency={currency} 
-                language={language}
-                activeAccount={activeAccount}
               />
-            </div>
-          )}
+            )}
 
-          {!loadingCloud && activeTab === 'JOURNAL' && (
-            <div className="space-y-6">
-              <AccountManager 
-                accounts={accounts}
-                activeAccountId={activeAccountId}
-                onSelectAccount={handleSelectAccount}
-                onAddAccount={handleAddAccount}
-                onDeleteAccount={handleDeleteAccount}
-                trades={trades}
-                language={language}
+            {!loadingCloud && activeTab === 'CHARTS' && (
+              <TradingViewCharts 
+                language={language} 
+                isPremium={isPremium} 
+                onUpgradeClick={() => setActiveTab('PREMIUM')}
               />
-              <TradeJournal 
-                trades={activeTrades}
-                onAddTrade={handleAddNewTrade}
-                onUpdateTrade={handleUpdateTrade}
-                onDeleteTrade={handleDeleteTrade}
+            )}
+
+            {!loadingCloud && activeTab === 'PREMIUM' && (
+              <PremiumPage 
+                userId={activeUser?.uid || 'local'}
+                userEmail={activeUser?.email}
+                createdAt={userCreatedAt}
                 currency={currency}
-                language={language}
+                isExpired={false}
               />
-            </div>
-          )}
-
-          {!loadingCloud && activeTab === 'NEWS' && (
-            <EconomicNewsAnalysis language={language} />
-          )}
-
-          {!loadingCloud && activeTab === 'WORKSPACE' && (
-            <WorkspaceLinks language={language} />
-          )}
-
-          {!loadingCloud && activeTab === 'SALARY' && (
-            <SalaryDashboard 
-              trades={activeTrades} 
-              language={language} 
-              currency={currency} 
-            />
-          )}
-
-          {!loadingCloud && activeTab === 'CHARTS' && (
-            <TradingViewCharts 
-              language={language} 
-              isPremium={isPremium} 
-              onUpgradeClick={() => setActiveTab('PREMIUM')}
-            />
-          )}
-
-          {!loadingCloud && activeTab === 'PREMIUM' && (
-            <PremiumPage 
-              userId={activeUser?.uid || 'local'}
-              userEmail={activeUser?.email}
-              createdAt={userCreatedAt}
-              currency={currency}
-              isExpired={false}
-            />
-          )}
+            )}
+          </div>
         </div>
 
       </main>
