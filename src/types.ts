@@ -129,3 +129,17 @@ export interface WorkspaceLink {
   createdAt: string;
 }
 
+export interface SessionAnalysis {
+  id: string;
+  userId: string;
+  date: string; // YYYY-MM-DD
+  tradingViewLinks: string; // text with link URLs of TradingView screenshot
+  newsLink: string; // link of the economic news
+  macroEvent: string; // manually written name of the economic announcement
+  notes: string;
+  imageLink1?: string;
+  imageLink2?: string;
+  createdAt: string;
+  updatedAt?: string;
+}
+

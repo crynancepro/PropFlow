@@ -420,8 +420,7 @@ export default function StatsDashboard({ trades, startingBalance, currency, lang
       }
     });
 
-    const peakDrawdownRaw = peakBalance - balanceCurrent;
-    const overallLossCurrent = peakDrawdownRaw > 0 ? peakDrawdownRaw : (netProfitVal < 0 ? Math.abs(netProfitVal) : 0);
+    const overallLossCurrent = balanceCurrent < capital ? (capital - balanceCurrent) : 0;
 
     // Progression rates
     const p1Progress = Math.min(100, Math.max(0, (netProfitVal / targetP1Amt) * 100));
@@ -1515,7 +1514,7 @@ export default function StatsDashboard({ trades, startingBalance, currency, lang
           {/* Overall max loss limit tracker */}
           <div className="bg-black/25 border border-white/5 rounded-xl p-4 flex flex-col justify-between" id="pf-max-drawdown-box">
             <div className="flex items-center justify-between mb-3">
-              <span className="text-[10px] text-rose-400 font-extrabold font-mono uppercase tracking-wider">
+              <span className={`text-[10px] font-extrabold font-mono uppercase tracking-wider ${propFirmMetrics.overallLossCurrent === 0 ? 'text-cyan-400' : 'text-rose-400'}`}>
                 {language === 'fr' ? 'DRAWDOWN MAX GLOBAL' : 'MAX DRAWDOWN LIMIT'}
               </span>
               <span className="text-[9.5px] font-mono font-bold text-slate-500">
@@ -1524,18 +1523,29 @@ export default function StatsDashboard({ trades, startingBalance, currency, lang
             </div>
 
             <div className="space-y-2">
-              <div className="text-2xl font-black font-mono tracking-tight text-white flex items-baseline gap-1.5">
-                <span className="text-rose-400">-{propFirmMetrics.overallLossCurrent.toLocaleString(undefined, { maximumFractionDigits: 1 })}</span>
+              <div className="text-2xl font-black font-mono tracking-tight text-white flex items-baseline gap-1.5 flex-wrap">
+                {propFirmMetrics.overallLossCurrent === 0 ? (
+                  <span className="text-cyan-400">0.00 {currency}</span>
+                ) : (
+                  <span className="text-rose-400">-{propFirmMetrics.overallLossCurrent.toLocaleString(undefined, { maximumFractionDigits: 1 })}</span>
+                )}
                 <span className="text-xs text-slate-500 font-medium font-sans">
                   / -{propFirmMetrics.maxDrawdownAmt.toLocaleString(undefined, { maximumFractionDigits: 0 })} {currency}
                 </span>
               </div>
               
-              <p className="text-[11px] text-slate-300 font-medium">
-                {language === 'fr'
-                  ? `${((propFirmMetrics.overallLossCurrent / propFirmMetrics.maxDrawdownAmt) * 100).toFixed(0)}% consommé au total`
-                  : `${((propFirmMetrics.overallLossCurrent / propFirmMetrics.maxDrawdownAmt) * 100).toFixed(0)}% total limit consumed`}
-              </p>
+              {propFirmMetrics.overallLossCurrent === 0 ? (
+                <div className="text-[10px] font-bold text-cyan-400 font-sans tracking-wide flex items-center gap-1 py-0.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse shrink-0" />
+                  {language === 'fr' ? 'Compte Sécurisé (0% consommé)' : 'Account Secured (0% consumed)'}
+                </div>
+              ) : (
+                <p className="text-[11px] text-slate-300 font-medium">
+                  {language === 'fr'
+                    ? `${((propFirmMetrics.overallLossCurrent / propFirmMetrics.maxDrawdownAmt) * 100).toFixed(0)}% consommé au total`
+                    : `${((propFirmMetrics.overallLossCurrent / propFirmMetrics.maxDrawdownAmt) * 100).toFixed(0)}% total limit consumed`}
+                </p>
+              )}
 
               {/* Progress bar */}
               <div className="w-full bg-[#0A0B0D] h-2.5 rounded-full overflow-hidden border border-white/5">
@@ -1545,7 +1555,7 @@ export default function StatsDashboard({ trades, startingBalance, currency, lang
                       ? 'bg-rose-600'
                       : propFirmMetrics.maxDrawdownRisk
                       ? 'bg-amber-500'
-                      : 'bg-rose-500/70'
+                      : 'bg-cyan-500'
                   }`}
                   style={{ width: `${Math.min(100, (propFirmMetrics.overallLossCurrent / propFirmMetrics.maxDrawdownAmt) * 100)}%` }}
                 />
@@ -1553,8 +1563,8 @@ export default function StatsDashboard({ trades, startingBalance, currency, lang
             </div>
 
             <div className="text-[10px] font-mono text-slate-500 pt-3 border-t border-white/5 mt-3 flex justify-between items-center">
-              <span>{language === 'fr' ? 'Sommet de Solde (Peak) :' : 'Peak account balance:'}</span>
-              <span className="text-slate-300 font-bold">{propFirmMetrics.peakBalance.toLocaleString()} {currency}</span>
+              <span>{language === 'fr' ? 'Capital de Départ :' : 'Initial Capital:'}</span>
+              <span className="text-slate-300 font-bold">{propFirmMetrics.capital.toLocaleString()} {currency}</span>
             </div>
           </div>
 
@@ -2031,234 +2041,8 @@ export default function StatsDashboard({ trades, startingBalance, currency, lang
             </div>
 
           </div>
-
-        {/* SECTION: WEEKLY PSYCHOLOGY & ERROR REVIEW JOURNAL */}
-        <div className="bg-gradient-to-b from-[#161B22] to-[#0E1116] border border-white/5 rounded-2xl p-6 mt-6 shadow-xl relative overflow-hidden animate-fade-in" id="weekly-psych-dashboard">
-          {/* Subtle decoration bar */}
-          <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-sky-500 via-indigo-500 to-purple-500" />
-          <div className="absolute -top-10 -left-10 w-44 h-44 bg-indigo-500/5 rounded-full blur-[50px] pointer-events-none" />
-
-          {/* Header */}
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-white/5 pb-4 mb-6">
-            <div className="flex items-center gap-3">
-              <div className="bg-gradient-to-br from-indigo-500/10 to-purple-500/10 border border-indigo-500/20 p-2.5 rounded-xl text-indigo-400">
-                <BrainCircuit className="w-5 h-5" strokeWidth={2} />
-              </div>
-              <div>
-                <h3 className="text-sm font-black uppercase tracking-wider font-mono text-slate-100 flex items-center gap-1.5 flex-wrap">
-                  Revue Psychologique & Erreurs de Fin de Semaine
-                  <span className="bg-indigo-500/15 text-indigo-300 px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wide border border-indigo-500/20">
-                    SMC AI Coach
-                  </span>
-                </h3>
-                <p className="text-xs text-slate-400 mt-1 font-medium">
-                  Rapport consolidé sur votre résilience mentale et la correction des érosions de capital.
-                </p>
-              </div>
-            </div>
-
-            {/* Discipline Score Indicator */}
-            <div className="bg-[#0A0B0D] border border-white/5 rounded-xl p-3 flex items-center gap-4 shrink-0 self-stretch sm:self-auto justify-between">
-              <div>
-                <span className="text-[9px] text-slate-500 uppercase font-black tracking-wider block mb-0.5">Discipline Globale</span>
-                <span className="text-sm font-bold font-mono text-amber-400">
-                  {behavioralStats.averageDisciplineRating > 0 ? `${behavioralStats.averageDisciplineRating.toFixed(1)} / 5` : 'N/A'}
-                </span>
-              </div>
-              <div className="flex gap-0.5">
-                {[1, 2, 3, 4, 5].map((star) => {
-                  const rounded = Math.round(behavioralStats.averageDisciplineRating || 3);
-                  return (
-                    <Trophy 
-                      key={star} 
-                      className={`w-3.5 h-3.5 ${star <= rounded ? 'text-amber-450 fill-amber-450 text-amber-400' : 'text-slate-800'}`} 
-                    />
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-            {/* Column 1: Emotions Breakdown */}
-            <div className="bg-[#0A0B0D] p-5 rounded-xl border border-white/5 space-y-4">
-              <div>
-                <h4 className="text-xs font-black uppercase text-slate-300 tracking-wider font-mono flex items-center gap-2">
-                  <Sparkles className="w-4 h-4 text-sky-450" />
-                  Impact Psychologique & Émotions
-                </h4>
-                <p className="text-[10px] text-slate-500 mt-0.5">
-                  Fréquence et impact financier de vos états émotionnels.
-                </p>
-              </div>
-
-              <div className="space-y-3">
-                {behavioralStats.emotionsList.length === 0 ? (
-                  <div className="text-center py-8">
-                    <p className="text-xs text-slate-500 italic">Aucune émotion répertoriée dans vos trades.</p>
-                  </div>
-                ) : (
-                  behavioralStats.emotionsList.map((tag) => {
-                    const isWinFactor = tag.wins / (tag.count || 1) >= 0.5;
-                    const isPnlPositive = tag.pnl >= 0;
-                    return (
-                      <div key={tag.name} className="border-b border-white/5 pb-2 last:border-0 last:pb-0">
-                        <div className="flex items-center justify-between text-xs mb-1">
-                          <span className="font-bold text-slate-200 bg-white/5 px-2 py-0.5 rounded text-[10px]">
-                            {tag.name}
-                          </span>
-                          <span className={`font-mono font-bold ${isPnlPositive ? 'text-emerald-400' : 'text-rose-400'}`}>
-                            {isPnlPositive ? '+' : ''}{tag.pnl.toLocaleString()} {currency}
-                          </span>
-                        </div>
-                        <div className="flex items-center justify-between text-[10px] text-slate-400 font-mono">
-                          <span>Fidélité : <strong className="text-slate-200">{tag.count} trades</strong></span>
-                          <span>Wins : <strong className={isWinFactor ? 'text-emerald-400' : 'text-rose-450'}>{((tag.wins / tag.count) * 100).toFixed(0)}%</strong></span>
-                        </div>
-                        <div className="w-full bg-[#161B22] h-1 rounded-full overflow-hidden mt-1.5">
-                          <div 
-                            className={`h-full rounded-full ${isPnlPositive ? 'bg-emerald-500' : 'bg-rose-500'}`}
-                            style={{ width: `${Math.min(100, (tag.count / behavioralStats.closedTradesCount) * 100)}%` }}
-                          />
-                        </div>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-            </div>
-
-            {/* Column 2: Mistakes Breakdown */}
-            <div className="bg-[#0A0B0D] p-5 rounded-xl border border-white/5 space-y-4">
-              <div>
-                <h4 className="text-xs font-black uppercase text-slate-300 tracking-wider font-mono flex items-center gap-2">
-                  <AlertTriangle className="w-4 h-4 text-rose-500" />
-                  Erosion des Pertes & Erreurs Commises
-                </h4>
-                <p className="text-[10px] text-slate-500 mt-0.5">
-                  Identifier les dérives techniques de la semaine pour stopper l'usure.
-                </p>
-              </div>
-
-              <div className="space-y-3">
-                {behavioralStats.mistakesList.length === 0 ? (
-                  <div className="text-center py-8">
-                    <p className="text-xs text-slate-500 italic">Aucune dérive ou erreur répertoriée. Idéal !</p>
-                  </div>
-                ) : (
-                  behavioralStats.mistakesList.map((tag) => {
-                    const isNoMistake = tag.name.includes('No Mistake') || tag.name.includes('None') || tag.name.includes('✅');
-                    return (
-                      <div key={tag.name} className="border-b border-white/5 pb-2 last:border-0 last:pb-0">
-                        <div className="flex items-center justify-between text-xs mb-1">
-                          <span className={`font-bold px-2 py-0.5 rounded text-[10px] ${
-                            isNoMistake 
-                              ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/10' 
-                              : 'bg-rose-500/10 text-rose-300 border border-rose-500/10'
-                          }`}>
-                            {tag.name}
-                          </span>
-                          <span className={`font-mono font-bold ${tag.pnl >= 0 ? 'text-emerald-400' : 'text-rose-500'}`}>
-                            {tag.pnl >= 0 ? '+' : ''}{tag.pnl.toLocaleString()} {currency}
-                          </span>
-                        </div>
-                        <div className="flex items-center justify-between text-[10px] text-slate-400 font-mono">
-                          <span>Occurrences : <strong className="text-slate-200">{tag.count} fois</strong></span>
-                          <span>Taux : <strong className={tag.wins >= tag.losses ? 'text-emerald-400' : 'text-rose-450'}>{((tag.wins / tag.count) * 100).toFixed(0)}%</strong></span>
-                        </div>
-                        <div className="w-full bg-[#161B22] h-1 rounded-full overflow-hidden mt-1.5">
-                          <div 
-                            className={`h-full rounded-full ${isNoMistake ? 'bg-emerald-500' : 'bg-rose-500'}`}
-                            style={{ width: `${Math.min(100, (tag.count / behavioralStats.closedTradesCount) * 100)}%` }}
-                          />
-                        </div>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-            </div>
-
-            {/* Column 3: AI Advice Report Panel */}
-            <div className="bg-[#0A0B0D] p-5 rounded-xl border border-white/5 space-y-4 flex flex-col justify-between">
-              <div>
-                <h4 className="text-xs font-black uppercase text-indigo-400 tracking-wider font-mono flex items-center gap-2">
-                  <BrainCircuit className="w-4 h-4" />
-                  Diagnostic IA & Actions Correctives
-                </h4>
-                <p className="text-[10px] text-slate-500 mt-0.5">
-                  Plan de travail psychologique et comportemental de week-end.
-                </p>
-              </div>
-
-              {/* Dynamic Advisor advice */}
-              <div className="bg-[#161B22]/50 border border-white/5 rounded-lg p-3.5 space-y-3 flex-1 mt-4">
-                <div className="space-y-1">
-                  <span className="text-[9px] font-black uppercase tracking-wider font-mono text-indigo-400 block">
-                    Points Vulnérables Identifiés
-                  </span>
-                  <div className="text-xs text-slate-300 font-medium leading-relaxed">
-                    {behavioralStats.mistakesList.length > 0 && behavioralStats.mistakesList[0] && !behavioralStats.mistakesList[0].name.includes('No Mistake') ? (
-                      <span>
-                        L'erreur principale sabotant vos statistiques est : <strong className="text-rose-400 font-bold">{behavioralStats.mistakesList[0].name}</strong> ({behavioralStats.mistakesList[0].count} fois). Son coût financier s'élève à <strong className="text-rose-400 font-bold">{behavioralStats.mistakesList[0].pnl.toLocaleString()} {currency}</strong>.
-                      </span>
-                    ) : behavioralStats.emotionsList.length > 0 ? (
-                      <span>
-                        L'état d'esprit récurrent impactant vos décisions est : <strong className="text-sky-450 font-bold">{behavioralStats.emotionsList[0].name}</strong>. C'est le principal facteur limitant votre progression.
-                      </span>
-                    ) : (
-                      <span>
-                        Aucune dérive statistique majeure décelée cette semaine ! Vos émotions et techniques de filtrage des trades respectent fermement votre cahier des charges de trader professionnel.
-                      </span>
-                    )}
-                  </div>
-                </div>
-
-                <div className="space-y-1 border-t border-white/5 pt-3">
-                  <span className="text-[9px] font-black uppercase tracking-wider font-mono text-emerald-400 block">
-                    Plan d'Action de Fin de Semaine
-                  </span>
-                  <div className="text-xs text-slate-300 leading-relaxed font-medium">
-                    {behavioralStats.mistakesList.length > 0 && behavioralStats.mistakesList[0] && behavioralStats.mistakesList[0].name.includes('Over-leveraging') ? (
-                      <span>
-                        👉 <strong className="text-emerald-400 block font-bold mt-1 mb-0.5">Lissage de levier :</strong> Limitez le risque maximum à 0.5% ou 1% par trade sur vos prochaines sessions. Ne tradez que 1 seul lot fixe jusqu'à correction.
-                      </span>
-                    ) : behavioralStats.mistakesList.length > 0 && behavioralStats.mistakesList[0] && behavioralStats.mistakesList[0].name.includes('Moved SL') ? (
-                      <span>
-                        👉 <strong className="text-emerald-400 block font-bold mt-1 mb-0.5">Règle 'Set & Forget' :</strong> Ce week-end, entraînez-vous à lâcher vos positions après l'entrée. Ne touchez plus jamais aux limites si le trade est ouvert !
-                      </span>
-                    ) : behavioralStats.emotionsList.length > 0 && behavioralStats.emotionsList[0] && behavioralStats.emotionsList[0].name.includes('FOMO') ? (
-                      <span>
-                        👉 <strong className="text-emerald-400 block font-bold mt-1 mb-0.5">Filtrage de patience :</strong> Pratiquez la respiration de cohérence cardiaque 2 minutes avant de lancer l'ordre. Attendez impérativement un CHoCH ou MSS 1M/5M.
-                      </span>
-                    ) : behavioralStats.emotionsList.length > 0 && behavioralStats.emotionsList[0] && behavioralStats.emotionsList[0].name.includes('Revenge') ? (
-                      <span>
-                        👉 <strong className="text-emerald-400 block font-bold mt-1 mb-0.5">Verrouillage de perte :</strong> Règle des deux stops consécutifs. Dès que 2 transactions échouent, obligation absolue de fermer l'ordinateur pendant 4 heures.
-                      </span>
-                    ) : (
-                      <span>
-                        👉 <strong className="text-emerald-400 block font-semibold mt-1 mb-0.5">Pratique de la Déconnexion :</strong> Tout est en ordre. Votre processus opérationnel est idéal. Coupez l'accès aux graphiques ce week-end pour recharger vos réserves mentales.
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Weekend checklist */}
-              <div className="bg-[#0A0B0D] p-3 rounded-lg border border-white/5 mt-3 text-[11px] text-slate-400 space-y-1">
-                <div className="flex items-center gap-1.5 font-bold text-slate-300">
-                  <CheckCircle className="w-3.5 h-3.5 text-indigo-400 flex-shrink-0" />
-                  <span>Checklist de Fin de Semaine</span>
-                </div>
-                <p>1. Exportez vos captures de graphiques clôturés.</p>
-                <p>2. Éteignez vos terminaux vendredi soir à 22h00.</p>
-                <p>3. Planifiez vos zones H4 dimanche soir.</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </>
-    )}
+        </>
+      )}
 
     </div>
   );

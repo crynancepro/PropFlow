@@ -11,6 +11,7 @@ import { createPremiumInvoice } from './services/nowpayments';
 import PremiumPage from './pages/Premium';
 import TradingViewCharts from './components/TradingViewCharts';
 import SalaryDashboard from './pages/SalaryDashboard';
+import SessionAnalysisPage from './pages/SessionAnalysisPage';
 import { playHighTechClick } from './utils/soundEffects';
 
 import { 
@@ -22,7 +23,7 @@ import { onAuthStateChanged, type User as FirebaseUser } from 'firebase/auth';
 import { 
   TrendingUp, BarChart2, BookOpen, PlayCircle, ShieldCheck, 
   Settings, LogIn, LogOut, RefreshCw, HelpCircle, BadgeCheck, DollarSign, Globe, Monitor,
-  Sun, Moon, Crown, Tv, Coins
+  Sun, Moon, Crown, Tv, Coins, Calendar
 } from 'lucide-react';
 
 const DEFAULT_TRADES: Trade[] = [
@@ -96,7 +97,7 @@ const DEFAULT_TRADES: Trade[] = [
 ];
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'STATS' | 'JOURNAL' | 'WORKSPACE' | 'CHARTS' | 'SALARY' | 'PREMIUM'>('STATS');
+  const [activeTab, setActiveTab] = useState<'STATS' | 'JOURNAL' | 'ANALYSIS' | 'WORKSPACE' | 'CHARTS' | 'SALARY' | 'PREMIUM'>('STATS');
   const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
   const [demoUser, setDemoUser] = useState<{ uid: string; email: string; displayName?: string } | null>(() => {
     const saved = localStorage.getItem('trading_demo_user');
@@ -949,6 +950,7 @@ export default function App() {
               {[
                 { id: 'STATS', label: TRANSLATIONS[language].tabDashboard, icon: BarChart2, color: 'text-sky-400' },
                 { id: 'JOURNAL', label: TRANSLATIONS[language].tabJournal, icon: BookOpen, color: 'text-emerald-400' },
+                { id: 'ANALYSIS', label: TRANSLATIONS[language].tabAnalysis || "Archivage & Sessions", icon: Calendar, color: 'text-cyan-400' },
                 { id: 'SALARY', label: TRANSLATIONS[language].tabSalary || "Revenus & Payouts", icon: Coins, color: 'text-rose-400' },
                 { id: 'WORKSPACE', label: TRANSLATIONS[language].tabWorkspace, icon: Monitor, color: 'text-teal-400' },
                 { id: 'CHARTS', label: TRANSLATIONS[language].tabCharts || 'Double Graphique', icon: Tv, color: 'text-pink-400' },
@@ -1023,6 +1025,15 @@ export default function App() {
                   onUpdateTrade={handleUpdateTrade}
                   onDeleteTrade={handleDeleteTrade}
                   currency={currency}
+                  language={language}
+                />
+              </div>
+            )}
+
+            {!loadingCloud && activeTab === 'ANALYSIS' && (
+              <div className="w-full">
+                <SessionAnalysisPage 
+                  userId={activeUser?.uid || 'local'}
                   language={language}
                 />
               </div>

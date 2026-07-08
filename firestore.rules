@@ -52,6 +52,20 @@ service cloud.firestore {
         && data.netProfit is number;
     }
 
+    function isValidSessionAnalysis(data, ownerId) {
+      return data.userId == ownerId
+        && data.date is string
+        && data.date.size() <= 30
+        && data.tradingViewLinks is string
+        && data.tradingViewLinks.size() <= 5000
+        && data.newsLink is string
+        && data.newsLink.size() <= 5000
+        && data.macroEvent is string
+        && data.macroEvent.size() <= 100
+        && data.notes is string
+        && data.notes.size() <= 20000;
+    }
+
     // User rules
     match /users/{userId} {
       allow read, delete: if isOwner(userId);
@@ -70,6 +84,13 @@ service cloud.firestore {
         allow read, delete: if isOwner(userId);
         allow create: if isOwner(userId) && isValidBacktest(request.resource.data, userId);
         allow update: if isOwner(userId) && isValidBacktest(request.resource.data, userId);
+      }
+
+      // Sessions analysis subcollection
+      match /sessions_analysis/{sessionId} {
+        allow read, delete: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidSessionAnalysis(request.resource.data, userId);
+        allow update: if isOwner(userId) && isValidSessionAnalysis(request.resource.data, userId);
       }
     }
   }

@@ -30,6 +30,7 @@ export const TRANSLATIONS: Record<Language, Record<string, string>> = {
     // Tabs
     tabDashboard: "Dashboard",
     tabJournal: "Journal des positions",
+    tabAnalysis: "Archivage & Sessions",
     tabNews: "Analyse News",
     tabWorkspace: "Espace de Travail",
     tabCharts: "Double Graphique",
@@ -113,6 +114,7 @@ export const TRANSLATIONS: Record<Language, Record<string, string>> = {
     // Tabs
     tabDashboard: "Dashboard",
     tabJournal: "Positions Journal",
+    tabAnalysis: "Session Archiving",
     tabNews: "News Analysis",
     tabWorkspace: "Workspace Links",
     tabCharts: "Dual Charts",

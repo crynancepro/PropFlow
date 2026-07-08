@@ -60,6 +60,23 @@
         "createdAt": { "type": "string", "format": "date-time", "description": "Creation timestamp" }
       },
       "required": ["id", "userId", "strategyName", "symbol", "startingCapital", "winRate", "netProfit", "createdAt"]
+    },
+    "SessionAnalysis": {
+      "title": "Session Analysis Log",
+      "description": "Daily or session-based technical review, macro alignment, and backtesting notes without real trades.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique session analysis ID" },
+        "userId": { "type": "string", "description": "UID of the owner" },
+        "date": { "type": "string", "description": "Selected analysis date (YYYY-MM-DD)" },
+        "tradingViewLinks": { "type": "string", "description": "URL links to TradingView charts separated by newlines" },
+        "newsLink": { "type": "string", "description": "URL link to economic news or calendar event" },
+        "macroEvent": { "type": "string", "description": "Manually entered name of the economic announcement" },
+        "notes": { "type": "string", "description": "Text describing progress, session details, and lessons learned" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Creation timestamp" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Last modification timestamp" }
+      },
+      "required": ["id", "userId", "date", "createdAt"]
     }
   },
   "firestore": {
@@ -74,6 +91,10 @@
     "users/{userId}/backtests/{backtestId}": {
       "schema": "Backtest",
       "description": "Backtest runs performed by the user."
+    },
+    "users/{userId}/sessions_analysis/{sessionId}": {
+      "schema": "SessionAnalysis",
+      "description": "Archived session analyses and notes for a user."
     }
   }
 }
